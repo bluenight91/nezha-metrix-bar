@@ -1,6 +1,6 @@
 <bar protocol-version="0"
      category="monitoring"
-     version="1.1.0"
+     version="1.2.0"
      icon="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNMjEuMSAwdjE4Ni4yTDE1Mi40IDI2OCA0NjMuOCA3OC42IDQ0MS43IDc3VjB6IiBzdHlsZT0iZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojMGE5NGYyIi8+PHBhdGggZD0iTTE2My45IDM3MCAyMS4xIDI3OS45djEyOC4zTDIzMC43IDUxMmwyMDkuNi0xMDMuOFYxNzUuOEw0OTEgOTMuM3oiIHN0eWxlPSJmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOiMwMzM4ZDYiLz48L3N2Zz4="
      description="Monitor Nezha servers, service probes, and attention items from your menu bar."
      license="AGPL-3.0-only"
@@ -163,6 +163,8 @@ function summarizeScoped(list, nowMs = Date.now()) {
   let online = 0;
   let netDown = 0;
   let netUp = 0;
+  let transferDown = 0;
+  let transferUp = 0;
   let cpuSum = 0;
   let cpuN = 0;
   for (const s of list) {
@@ -171,6 +173,8 @@ function summarizeScoped(list, nowMs = Date.now()) {
     const st = s.state || {};
     netDown += Number(st.net_in_speed) || 0;
     netUp += Number(st.net_out_speed) || 0;
+    transferDown += Number(st.net_in_transfer) || 0;
+    transferUp += Number(st.net_out_transfer) || 0;
     if (on && Number.isFinite(Number(st.cpu))) {
       cpuSum += Number(st.cpu);
       cpuN += 1;
@@ -182,6 +186,8 @@ function summarizeScoped(list, nowMs = Date.now()) {
     offline: Math.max(0, list.length - online),
     netDown,
     netUp,
+    transferDown,
+    transferUp,
     avgCpu: cpuN ? cpuSum / cpuN : 0,
   };
 }
@@ -200,17 +206,20 @@ function formatRate(bytesPerSec, compact = false) {
   return `${v.toFixed(digits)}${units[i]}`;
 }
 
-function formatBytes(bytes, digits = 1) {
+function formatBytes(bytes, digits = 1, compact = false) {
   const n = Number(bytes) || 0;
   const abs = Math.abs(n);
-  const units = ["B", "KB", "MB", "GB", "TB"];
+  const units = compact ? ["B", "K", "M", "G", "T"] : ["B", "KB", "MB", "GB", "TB"];
   let v = abs;
   let i = 0;
   while (v >= 1024 && i < units.length - 1) {
     v /= 1024;
     i += 1;
   }
-  return `${v.toFixed(digits)} ${units[i]}`;
+  const d = compact ? (v >= 100 ? 0 : v >= 10 ? 1 : 2) : digits;
+  let text = v.toFixed(d);
+  if (compact && d > 0) text = text.replace(/\.?0+$/, "");
+  return compact ? `${text}${units[i]}` : `${text} ${units[i]}`;
 }
 
 function pct(used, total) {
@@ -298,6 +307,145 @@ function trayTitle(format, summary) {
   }
 }
 
+function buildCycleTransfers(payload) {
+  const stats = (payload && payload.cycle_transfer_stats) || {};
+  const out = [];
+  for (const [cycleId, item] of Object.entries(stats)) {
+    if (!item || typeof item !== "object") continue;
+    const max = Number(item.max) || 0;
+    if (max <= 0) continue;
+    const names = item.server_name || {};
+    const transfer = item.transfer || {};
+    const nextUpdate = item.next_update || {};
+    for (const serverId of Object.keys(names)) {
+      const used = Number(transfer[serverId]) || 0;
+      out.push({
+        id: `${cycleId}:${serverId}`,
+        cycle: String(item.name || cycleId),
+        serverId: String(serverId),
+        serverName: String(names[serverId] || serverId),
+        from: String(item.from || ""),
+        to: String(item.to || ""),
+        nextUpdate: String(nextUpdate[serverId] || ""),
+        max,
+        used,
+        pct: Math.max(0, Math.min(100, (used / max) * 100)),
+      });
+    }
+  }
+  out.sort((a, b) => b.pct - a.pct || a.serverName.localeCompare(b.serverName));
+  return out;
+}
+
+function formatMonthDay(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+}
+
+function formatMonthDayTime(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatDuration(seconds) {
+  const s = Math.max(0, Math.round(Number(seconds) || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h >= 24) {
+    const d = Math.floor(h / 24);
+    return `${d}d ${h % 24}h`;
+  }
+  return `${h}h ${m}m`;
+}
+
+function buildMonitorRows(monitors) {
+  const list = Array.isArray(monitors) ? monitors : [];
+  const out = [];
+  for (const m of list) {
+    if (!m || typeof m !== "object") continue;
+    const ts = Array.isArray(m.created_at) ? m.created_at : [];
+    const delays = Array.isArray(m.avg_delay) ? m.avg_delay : [];
+    const total = delays.length;
+    let up = 0;
+    let lastDelay = null;
+    const points = [];
+    for (let i = 0; i < delays.length; i++) {
+      const v = delays[i];
+      if (v == null || !Number.isFinite(Number(v))) continue;
+      up += 1;
+      lastDelay = Number(v);
+      if (i < ts.length) points.push({ ts: Number(ts[i]), value: Number(v) });
+    }
+    const down = Math.max(0, total - up);
+    out.push({
+      id: String(m.monitor_id ?? m.id ?? m.monitor_name ?? ""),
+      name: String(m.monitor_name || m.monitor_id || "?"),
+      displayIndex: Number(m.display_index) || 0,
+      total,
+      up,
+      down,
+      lossPct: total > 0 ? (down / total) * 100 : 0,
+      delay: lastDelay,
+      points,
+    });
+  }
+  out.sort((a, b) => (a.delay ?? Infinity) - (b.delay ?? Infinity) || a.name.localeCompare(b.name));
+  return out;
+}
+
+function buildOnlineSummary(online, windowSeconds) {
+  const o = online && typeof online === "object" ? online : {};
+  const onlineSeconds = Number(o.total_online_seconds) || 0;
+  const win = Number(windowSeconds) > 0 ? Number(windowSeconds) : Math.max(1, onlineSeconds);
+  const rate = Number(o.online_rate);
+  return {
+    currentlyOnline: !!o.currently_online,
+    lastActive: String(o.last_active || ""),
+    windowStart: String(o.window_start || ""),
+    windowEnd: String(o.window_end || ""),
+    onlineSeconds,
+    offlineSeconds: Math.max(0, win - onlineSeconds),
+    ratePct: Number.isFinite(rate) ? rate : (onlineSeconds / win) * 100,
+    daily: Array.isArray(o.daily)
+      ? o.daily.map(d => ({ date: String(d.date || ""), onlineSeconds: Number(d.online_seconds) || 0 }))
+      : [],
+  };
+}
+
+function buildDailyOnlineRows(daily, nowMs = Date.now(), window = null) {
+  const list = Array.isArray(daily) ? daily : [];
+  const now = new Date(nowMs);
+  const pad = n => String(n).padStart(2, "0");
+  const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const winStart = window && window.start ? new Date(window.start).getTime() : NaN;
+  const winEnd = window && window.end ? new Date(window.end).getTime() : NaN;
+  return list.map(d => {
+    const onlineSeconds = Math.max(0, Number(d.onlineSeconds ?? d.online_seconds) || 0);
+    const parts = String(d.date || "").split("-").map(Number);
+    let expected = 86400;
+    if (parts.length === 3 && parts.every(Number.isFinite)) {
+      const dayStart = new Date(parts[0], parts[1] - 1, parts[2]).getTime();
+      const dayEnd = dayStart + 86400 * 1000;
+      const from = Number.isFinite(winStart) ? Math.max(dayStart, winStart) : dayStart;
+      const to = Math.min(Number.isFinite(winEnd) ? winEnd : dayEnd, dayEnd, nowMs);
+      expected = Math.max(1, Math.round((to - from) / 1000));
+    }
+    const pct = Math.max(0, Math.min(100, (onlineSeconds / expected) * 100));
+    const color = pct >= 99 ? "success" : pct >= 95 ? "warning" : "danger";
+    return { date: String(d.date || ""), onlineSeconds, expected, pct, color, isToday: d.date === todayKey };
+  });
+}
+
+function formatDailyDuration(seconds) {
+  const s = Math.max(0, Math.round(Number(seconds) || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return `${h}h ${m}m`;
+}
+
 function detectTransitions(prevOnlineIds, nextOnlineIds) {
   const wentOffline = [];
   for (const id of prevOnlineIds) {
@@ -324,7 +472,12 @@ const I18N = {
     openNezha: "打开哪吒",
     tabServers: "服务器",
     tabServices: "服务",
+    tabTraffic: "流量",
     tabAlerts: "关注",
+    cycleCount: "周期",
+    cycleWarn: "超 80%",
+    emptyTraffic: "没有设置周期流量提醒的主机",
+    nextUpdate: "下次更新",
     all: "全部",
     starred: "已选",
     sortCpu: "CPU",
@@ -339,6 +492,15 @@ const I18N = {
     period1d: "1天",
     period7d: "7天",
     noMetrics: "暂无指标历史（可能未启用 TSDB）",
+    latency: "网络延迟",
+    latencyEmpty: "该服务器没有关联的 Ping/HTTP 监控",
+    onlineSec: "在线情况",
+    onlineRate: "在线率",
+    totalOnline: "累计在线",
+    totalOffline: "累计离线",
+    lastActive: "最后活跃",
+    dailyOnline: "每日在线时长",
+    inProgress: "进行中",
     rules: "告警规则",
     wsDegraded: "实时通道不可用，已回退轮询",
     guestForced: "站点要求登录，请填写 API Token",
@@ -347,6 +509,9 @@ const I18N = {
     probeAlertTitle: "哪吒 · 探测失败",
     probeAlertBody: n => `${n} 当前失败`,
     clearWatch: "清空关注",
+    downRate: "下行",
+    upRate: "上行",
+    transfer: "累计流量",
   },
   en: {
     setupTitle: "Connect Nezha",
@@ -361,7 +526,12 @@ const I18N = {
     openNezha: "Open Nezha",
     tabServers: "Servers",
     tabServices: "Services",
+    tabTraffic: "Traffic",
     tabAlerts: "Alerts",
+    cycleCount: "Cycles",
+    cycleWarn: ">80%",
+    emptyTraffic: "No cycle traffic limits configured",
+    nextUpdate: "Next",
     all: "All",
     starred: "Watch",
     sortCpu: "CPU",
@@ -376,6 +546,15 @@ const I18N = {
     period1d: "1d",
     period7d: "7d",
     noMetrics: "No metric history (TSDB may be off)",
+    latency: "Latency",
+    latencyEmpty: "No Ping/HTTP monitors attached to this server",
+    onlineSec: "Uptime",
+    onlineRate: "Rate",
+    totalOnline: "Online",
+    totalOffline: "Offline",
+    lastActive: "Last seen",
+    dailyOnline: "Daily online",
+    inProgress: "running",
     rules: "Alert rules",
     wsDegraded: "Live stream unavailable; polling",
     guestForced: "Auth required — set API Token",
@@ -384,6 +563,9 @@ const I18N = {
     probeAlertTitle: "Nezha · Probe down",
     probeAlertBody: n => `${n} is failing`,
     clearWatch: "Clear watchlist",
+    downRate: "Down",
+    upRate: "Up",
+    transfer: "Transfer",
   },
 };
 
@@ -416,6 +598,7 @@ let sortBy = localStorage.getItem("nezha.sort") || "cpu";
 let selectedServerId = null;
 let detailPeriod = localStorage.getItem("nezha.period") || "1d";
 let metricsCache = new Map();
+let cycleTransfers = [];
 let serviceFilter = "all";
 let selectedServiceId = null;
 let watchlist = new Set();
@@ -573,6 +756,7 @@ async function refreshAll() {
     applyServers(results[1]);
     applyGroups(results[2]);
     serviceRows = mergeServiceRows(results[3], results[4]);
+    cycleTransfers = buildCycleTransfers(results[4]);
     alertRules = apiToken ? (results[5] || []) : [];
     forceAuthHint = false;
     loadedAt = Date.now();
@@ -674,7 +858,17 @@ async function loadMetrics(serverId) {
       const data = await nezhaFetch(`/api/v1/server/${serverId}/metrics?metric=${m}&period=${detailPeriod}`);
       out[m] = Array.isArray(data && data.data_points) ? data.data_points : [];
     }
-    metricsCache.set(key, { loading: false, error: "", series: out, loadedAt: Date.now() });
+    const days = detailPeriod === "7d" ? 7 : 1;
+    const monitorsPayload = await nezhaFetch(`/api/v1/server/${serverId}/service`).catch(() => []);
+    const onlinePayload = await nezhaFetch(`/api/v1/server/${serverId}/online-history?days=${days}`).catch(() => null);
+    metricsCache.set(key, {
+      loading: false,
+      error: "",
+      series: out,
+      monitors: Array.isArray(monitorsPayload) ? monitorsPayload : (monitorsPayload && monitorsPayload.data) || [],
+      online: onlinePayload && typeof onlinePayload === "object" ? (onlinePayload.data || onlinePayload) : null,
+      loadedAt: Date.now(),
+    });
   } catch (e) {
     metricsCache.set(key, { loading: false, error: String(e.message || e), series: {}, loadedAt: Date.now() });
   }
@@ -749,6 +943,7 @@ function topTabs() {
     items: [
       { label: t.tabServers, value: "servers" },
       { label: t.tabServices, value: "services" },
+      { label: t.tabTraffic, value: "traffic" },
       { label: t.tabAlerts, value: "alerts" },
     ],
     value: activeTab,
@@ -787,6 +982,12 @@ function overviewCard() {
       statCell(`↓${formatRate(s.netDown, true)}`, t.downRate || "下行", "text", "ov-down"),
       statCell(`↑${formatRate(s.netUp, true)}`, t.upRate || "上行", "text", "ov-up"),
       statCell(`${s.avgCpu.toFixed(0)}%`, "Avg CPU", "accent", "ov-cpu")
+    ),
+    h("Row", { tw: "items-center gap-3 w-full" },
+      TX(t.transfer || "累计流量", { tw: "text-[10px] text-textMuted shrink-0" }),
+      TX(`↓${formatBytes(s.transferDown, 1, true)}`, { tw: "text-[11px] font-semibold tabular-nums" }),
+      TX(`↑${formatBytes(s.transferUp, 1, true)}`, { tw: "text-[11px] font-semibold tabular-nums" }),
+      h("Spacer")
     ),
     h("Row", { tw: "items-center gap-2 w-full" },
       capsuleBar(onlineRate, s.offline > 0 ? "warning" : "success"),
@@ -889,6 +1090,11 @@ function serverCard(s) {
       TX(`↑${formatRate(st.net_out_speed, true)}`, { tw: "text-[9.5px] tabular-nums text-textMuted" }),
       h("Spacer"),
       TX(on ? `${Number(st.load_1 || 0).toFixed(2)}` : t.offline, { tw: `text-[9.5px] tabular-nums ${on ? "text-textMuted" : "text-danger"}` })
+    ),
+    h("Row", { tw: "items-center gap-1.5 w-full" },
+      TX(`↓${formatBytes(st.net_in_transfer, 1, true)}`, { tw: "text-[9.5px] tabular-nums text-textMuted" }),
+      TX(`↑${formatBytes(st.net_out_transfer, 1, true)}`, { tw: "text-[9.5px] tabular-nums text-textMuted" }),
+      h("Spacer")
     )
   );
 }
@@ -953,6 +1159,55 @@ function serverDetail(s) {
   const networkCharts = [netIn, netOut].filter(Boolean);
   const memPct = pct(st.mem_used, host.mem_total);
   const diskPct = pct(st.disk_used, host.disk_total);
+  const monitorRows = buildMonitorRows(cache.monitors);
+  const latencyCharts = monitorRows
+    .filter(r => r.points.length)
+    .slice(0, 8)
+    .map(r => ({ name: r.name, points: r.points.slice(-120).map(p => ({ x: p.ts, y: p.value })) }));
+  const days = detailPeriod === "7d" ? 7 : 1;
+  const online = cache.online ? buildOnlineSummary(cache.online, days * 86400) : null;
+  const monitorCard = r => h(
+    "Column",
+    { key: `mon-${r.id}`, tw: "gap-0.5 p-2 rounded-lg bg-surface border border-border grow basis-0 min-w-0" },
+    h("Row", { tw: "items-center gap-1 w-full" },
+      TX(r.name, { tw: "text-[10.5px] truncate" }),
+      h("Spacer"),
+      TX(r.lossPct > 0 ? `${r.lossPct.toFixed(1)}%` : "", {
+        tw: `text-[9.5px] tabular-nums text-${r.lossPct >= 5 ? "danger" : "warning"}`,
+      })
+    ),
+    TX(r.delay != null ? `${r.delay.toFixed(1)} ms` : "—", {
+      tw: `text-[12px] font-bold tabular-nums text-${r.delay == null ? "danger" : "text"}`,
+    })
+  );
+  const monitorGrid = chunk(monitorRows, 2).map((row, i) => {
+    const cells = row.map(monitorCard);
+    if (row.length === 1) cells.push(h("Box", { key: `mon-ph-${i}`, tw: "grow basis-0 min-w-0" }));
+    return h("Row", { key: `mon-row-${i}`, tw: "gap-2 w-full items-start" }, ...cells);
+  });
+  const onlineSection = online
+    ? h("Column", { tw: "gap-2.5 p-3 rounded-xl bg-surface w-full" },
+        TX(t.onlineSec, { tw: "text-[11px] font-bold" }),
+        h("Row", { tw: "items-end gap-3 w-full" },
+          statCell(`${online.ratePct.toFixed(1)}%`, t.onlineRate, online.ratePct >= 99 ? "success" : online.ratePct >= 95 ? "warning" : "danger", "on-rate"),
+          statCell(formatDuration(online.onlineSeconds), t.totalOnline, "success", "on-up"),
+          statCell(formatDuration(online.offlineSeconds), t.totalOffline, online.offlineSeconds > 300 ? "danger" : online.offlineSeconds > 60 ? "warning" : "textMuted", "on-down"),
+          statCell(online.lastActive ? formatMonthDayTime(online.lastActive) : "—", t.lastActive, "textMuted", "on-last")
+        ),
+        online.daily.length
+          ? h("Column", { tw: "gap-1.5 w-full" },
+              TX(t.dailyOnline, { tw: "text-[10px] text-textMuted" }),
+              ...buildDailyOnlineRows(online.daily, Date.now(), { start: online.windowStart, end: online.windowEnd }).slice(-7).map((d, i) => h("Row", { key: `day-${i}`, tw: "items-center gap-2 w-full" },
+                TX(d.date.slice(5), { tw: "text-[9.5px] tabular-nums text-textMuted w-[42px]" }),
+                capsuleBar(d.pct, d.color),
+                TX(`${formatDailyDuration(d.onlineSeconds)}${d.isToday ? " ·" + (t.inProgress || "进行中") : ""}`, {
+                  tw: `text-[9.5px] tabular-nums ${d.isToday ? "text-accent" : "text-textMuted"}`,
+                })
+              ))
+            )
+          : null
+      )
+    : null;
   const body = [
     h("Column", { tw: "gap-2.5 p-3 rounded-xl bg-surface w-full" },
       h("Row", { tw: "items-end gap-3 w-full" },
@@ -967,6 +1222,14 @@ function serverDetail(s) {
     cache.error ? TX(cache.error, { tw: "text-[12px] text-danger" }) : null,
     resourceCharts.length ? metricChart(resourceCharts, "area", 150) : null,
     networkCharts.length ? metricChart(networkCharts, "line", 150) : null,
+    monitorRows.length
+      ? h("Column", { tw: "gap-2 w-full" },
+          TX(t.latency, { tw: "text-[11px] font-bold" }),
+          latencyCharts.length ? metricChart(latencyCharts, "line", 150) : null,
+          ...monitorGrid
+        )
+      : (!cache.loading && cache.monitors ? TX(t.latencyEmpty, { tw: "text-[11px] text-textMuted" }) : null),
+    onlineSection,
     !cache.loading && !resourceCharts.length && !networkCharts.length
       ? TX(t.noMetrics, { tw: "text-[12px] text-textMuted" })
       : null,
@@ -986,7 +1249,9 @@ function serverDetail(s) {
       ),
     ],
     body,
-    150 + 118 + (resourceCharts.length ? 158 : 0) + (networkCharts.length ? 158 : 0) + 40
+    150 + 118 + (resourceCharts.length ? 158 : 0) + (networkCharts.length ? 158 : 0) +
+      (monitorRows.length ? 60 + (latencyCharts.length ? 158 : 0) + Math.ceil(monitorRows.length / 2) * 56 : 0) +
+      (online ? 190 + online.daily.slice(-7).length * 22 : 0) + 40
   );
 }
 
@@ -1051,6 +1316,54 @@ function servicesPanel() {
     body,
     292 + rows.length * 68
   );
+}
+
+function cycleCard(c) {
+  const t = T();
+  const color = c.pct >= 95 ? "danger" : c.pct >= 80 ? "warning" : "success";
+  return h(
+    "Column",
+    { key: `cyc-${c.id}`, tw: "gap-1.5 p-2.5 rounded-xl bg-surface border border-border grow basis-0 min-w-0" },
+    h("Row", { tw: "items-center gap-1.5 w-full" },
+      TX(c.serverName, { tw: "text-[12px] font-bold truncate" }),
+      h("Spacer"),
+      TX(`${c.pct.toFixed(1)}%`, { tw: `text-[10.5px] font-semibold tabular-nums text-${color}` })
+    ),
+    h("Row", { tw: "items-center gap-1 w-full" },
+      TX(c.cycle, { tw: "text-[9.5px] font-semibold text-accent truncate" })
+    ),
+    TX(`${formatBytes(c.used, 1, true)} / ${formatBytes(c.max, 1, true)}`, {
+      tw: "text-[11px] font-semibold tabular-nums",
+    }),
+    capsuleBar(c.pct, color),
+    h("Row", { tw: "items-center gap-1 w-full" },
+      TX(`${formatMonthDay(c.from)} - ${formatMonthDay(c.to)}`, { tw: "text-[9px] tabular-nums text-textMuted truncate" }),
+      h("Spacer")
+    ),
+    TX(`${t.nextUpdate} ${formatMonthDayTime(c.nextUpdate)}`, { tw: "text-[9px] tabular-nums text-textMuted truncate" })
+  );
+}
+
+function trafficPanel() {
+  const t = T();
+  const warnCount = cycleTransfers.filter(c => c.pct >= 80).length;
+  const summary = h(
+    "Column",
+    { tw: "gap-2.5 p-3 rounded-xl bg-surface w-full" },
+    h("Row", { tw: "items-end gap-3 w-full" },
+      statCell(String(cycleTransfers.length), t.cycleCount, "accent", "cyc-total"),
+      statCell(String(warnCount), t.cycleWarn, warnCount > 0 ? "warning" : "success", "cyc-warn")
+    )
+  );
+  const body = cycleTransfers.length
+    ? chunk(cycleTransfers, 2).map((row, i) => {
+        const cells = row.map(cycleCard);
+        if (row.length === 1) cells.push(h("Box", { key: `cyc-ph-${i}`, tw: "grow basis-0 min-w-0" }));
+        return h("Row", { key: `cyc-row-${i}`, tw: "gap-2.5 w-full items-start" }, ...cells);
+      })
+    : [TX(t.emptyTraffic, { tw: "text-[12px] text-textMuted" })];
+  const rowCount = Math.ceil(cycleTransfers.length / 2);
+  return panelShell([brandHeader(), topTabs(), summary], body, 232 + rowCount * 118);
 }
 
 function attentionRow(it) {
@@ -1135,6 +1448,7 @@ function panelTree() {
     return panelShell([brandHeader()], [TX(T().loading, { tw: "text-[12px] text-textMuted" })], 300, 300);
   }
   if (activeTab === "services") return servicesPanel();
+  if (activeTab === "traffic") return trafficPanel();
   if (activeTab === "alerts") return alertsPanelFn();
   return serversPanel();
 }

@@ -104,6 +104,8 @@ export function summarizeScoped(list, nowMs = Date.now()) {
   let online = 0;
   let netDown = 0;
   let netUp = 0;
+  let transferDown = 0;
+  let transferUp = 0;
   let cpuSum = 0;
   let cpuN = 0;
   for (const s of list) {
@@ -112,6 +114,8 @@ export function summarizeScoped(list, nowMs = Date.now()) {
     const st = s.state || {};
     netDown += Number(st.net_in_speed) || 0;
     netUp += Number(st.net_out_speed) || 0;
+    transferDown += Number(st.net_in_transfer) || 0;
+    transferUp += Number(st.net_out_transfer) || 0;
     if (on && Number.isFinite(Number(st.cpu))) {
       cpuSum += Number(st.cpu);
       cpuN += 1;
@@ -123,6 +127,8 @@ export function summarizeScoped(list, nowMs = Date.now()) {
     offline: Math.max(0, list.length - online),
     netDown,
     netUp,
+    transferDown,
+    transferUp,
     avgCpu: cpuN ? cpuSum / cpuN : 0,
   };
 }
@@ -141,17 +147,20 @@ export function formatRate(bytesPerSec, compact = false) {
   return `${v.toFixed(digits)}${units[i]}`;
 }
 
-export function formatBytes(bytes, digits = 1) {
+export function formatBytes(bytes, digits = 1, compact = false) {
   const n = Number(bytes) || 0;
   const abs = Math.abs(n);
-  const units = ["B", "KB", "MB", "GB", "TB"];
+  const units = compact ? ["B", "K", "M", "G", "T"] : ["B", "KB", "MB", "GB", "TB"];
   let v = abs;
   let i = 0;
   while (v >= 1024 && i < units.length - 1) {
     v /= 1024;
     i += 1;
   }
-  return `${v.toFixed(digits)} ${units[i]}`;
+  const d = compact ? (v >= 100 ? 0 : v >= 10 ? 1 : 2) : digits;
+  let text = v.toFixed(d);
+  if (compact && d > 0) text = text.replace(/\.?0+$/, "");
+  return compact ? `${text}${units[i]}` : `${text} ${units[i]}`;
 }
 
 export function pct(used, total) {
@@ -237,6 +246,145 @@ export function trayTitle(format, summary) {
     default:
       return `${on} · ${total}`;
   }
+}
+
+export function buildCycleTransfers(payload) {
+  const stats = (payload && payload.cycle_transfer_stats) || {};
+  const out = [];
+  for (const [cycleId, item] of Object.entries(stats)) {
+    if (!item || typeof item !== "object") continue;
+    const max = Number(item.max) || 0;
+    if (max <= 0) continue;
+    const names = item.server_name || {};
+    const transfer = item.transfer || {};
+    const nextUpdate = item.next_update || {};
+    for (const serverId of Object.keys(names)) {
+      const used = Number(transfer[serverId]) || 0;
+      out.push({
+        id: `${cycleId}:${serverId}`,
+        cycle: String(item.name || cycleId),
+        serverId: String(serverId),
+        serverName: String(names[serverId] || serverId),
+        from: String(item.from || ""),
+        to: String(item.to || ""),
+        nextUpdate: String(nextUpdate[serverId] || ""),
+        max,
+        used,
+        pct: Math.max(0, Math.min(100, (used / max) * 100)),
+      });
+    }
+  }
+  out.sort((a, b) => b.pct - a.pct || a.serverName.localeCompare(b.serverName));
+  return out;
+}
+
+export function formatMonthDay(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+}
+
+export function formatMonthDayTime(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export function formatDuration(seconds) {
+  const s = Math.max(0, Math.round(Number(seconds) || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h >= 24) {
+    const d = Math.floor(h / 24);
+    return `${d}d ${h % 24}h`;
+  }
+  return `${h}h ${m}m`;
+}
+
+export function buildMonitorRows(monitors) {
+  const list = Array.isArray(monitors) ? monitors : [];
+  const out = [];
+  for (const m of list) {
+    if (!m || typeof m !== "object") continue;
+    const ts = Array.isArray(m.created_at) ? m.created_at : [];
+    const delays = Array.isArray(m.avg_delay) ? m.avg_delay : [];
+    const total = delays.length;
+    let up = 0;
+    let lastDelay = null;
+    const points = [];
+    for (let i = 0; i < delays.length; i++) {
+      const v = delays[i];
+      if (v == null || !Number.isFinite(Number(v))) continue;
+      up += 1;
+      lastDelay = Number(v);
+      if (i < ts.length) points.push({ ts: Number(ts[i]), value: Number(v) });
+    }
+    const down = Math.max(0, total - up);
+    out.push({
+      id: String(m.monitor_id ?? m.id ?? m.monitor_name ?? ""),
+      name: String(m.monitor_name || m.monitor_id || "?"),
+      displayIndex: Number(m.display_index) || 0,
+      total,
+      up,
+      down,
+      lossPct: total > 0 ? (down / total) * 100 : 0,
+      delay: lastDelay,
+      points,
+    });
+  }
+  out.sort((a, b) => (a.delay ?? Infinity) - (b.delay ?? Infinity) || a.name.localeCompare(b.name));
+  return out;
+}
+
+export function buildOnlineSummary(online, windowSeconds) {
+  const o = online && typeof online === "object" ? online : {};
+  const onlineSeconds = Number(o.total_online_seconds) || 0;
+  const win = Number(windowSeconds) > 0 ? Number(windowSeconds) : Math.max(1, onlineSeconds);
+  const rate = Number(o.online_rate);
+  return {
+    currentlyOnline: !!o.currently_online,
+    lastActive: String(o.last_active || ""),
+    windowStart: String(o.window_start || ""),
+    windowEnd: String(o.window_end || ""),
+    onlineSeconds,
+    offlineSeconds: Math.max(0, win - onlineSeconds),
+    ratePct: Number.isFinite(rate) ? rate : (onlineSeconds / win) * 100,
+    daily: Array.isArray(o.daily)
+      ? o.daily.map(d => ({ date: String(d.date || ""), onlineSeconds: Number(d.online_seconds) || 0 }))
+      : [],
+  };
+}
+
+export function buildDailyOnlineRows(daily, nowMs = Date.now(), window = null) {
+  const list = Array.isArray(daily) ? daily : [];
+  const now = new Date(nowMs);
+  const pad = n => String(n).padStart(2, "0");
+  const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const winStart = window && window.start ? new Date(window.start).getTime() : NaN;
+  const winEnd = window && window.end ? new Date(window.end).getTime() : NaN;
+  return list.map(d => {
+    const onlineSeconds = Math.max(0, Number(d.onlineSeconds ?? d.online_seconds) || 0);
+    const parts = String(d.date || "").split("-").map(Number);
+    let expected = 86400;
+    if (parts.length === 3 && parts.every(Number.isFinite)) {
+      const dayStart = new Date(parts[0], parts[1] - 1, parts[2]).getTime();
+      const dayEnd = dayStart + 86400 * 1000;
+      const from = Number.isFinite(winStart) ? Math.max(dayStart, winStart) : dayStart;
+      const to = Math.min(Number.isFinite(winEnd) ? winEnd : dayEnd, dayEnd, nowMs);
+      expected = Math.max(1, Math.round((to - from) / 1000));
+    }
+    const pct = Math.max(0, Math.min(100, (onlineSeconds / expected) * 100));
+    const color = pct >= 99 ? "success" : pct >= 95 ? "warning" : "danger";
+    return { date: String(d.date || ""), onlineSeconds, expected, pct, color, isToday: d.date === todayKey };
+  });
+}
+
+export function formatDailyDuration(seconds) {
+  const s = Math.max(0, Math.round(Number(seconds) || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return `${h}h ${m}m`;
 }
 
 export function detectTransitions(prevOnlineIds, nextOnlineIds) {
