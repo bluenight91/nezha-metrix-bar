@@ -23,6 +23,12 @@ import {
   buildDailyOnlineRows,
   formatDailyDuration,
   detectTransitions,
+  resolveGroupSelection,
+  resourceColor,
+  formatRelativeTime,
+  filterServers,
+  detectTrafficThresholds,
+  resolveWidgetServer,
 } from "./helpers.mjs";
 
 test("normalizeBaseURL strips path and adds https", () => {
@@ -275,4 +281,150 @@ test("mergeServiceRows copies display_index for ordering", () => {
   );
   assert.deepEqual(rows.map(r => r.name), ["A", "B"]);
   assert.equal(rows[0].display_index, 1);
+});
+
+
+test("summarizeScoped excludes stale offline rates but keeps transfer totals", () => {
+  const now = Date.parse("2026-11-12T00:00:00Z");
+  const summary = summarizeScoped([
+    {
+      id: 1,
+      last_active: new Date(now).toISOString(),
+      state: { net_in_speed: 1024, net_out_speed: 2048, net_in_transfer: 100, net_out_transfer: 200 },
+    },
+    {
+      id: 2,
+      last_active: "2000-01-01T00:00:00Z",
+      state: { net_in_speed: 4096, net_out_speed: 8192, net_in_transfer: 300, net_out_transfer: 400 },
+    },
+  ], now);
+  assert.equal(summary.netDown, 1024);
+  assert.equal(summary.netUp, 2048);
+  assert.equal(summary.transferDown, 400);
+  assert.equal(summary.transferUp, 600);
+});
+
+test("mergeServerList drops inherited online boolean when REST omits it", () => {
+  const prev = new Map([
+    ["1", { id: 1, online: true, last_active: "2000-01-01T00:00:00Z" }],
+  ]);
+  const next = mergeServerList(prev, [{ id: 1, last_active: "2000-01-01T00:00:00Z" }]);
+  assert.equal(next.get("1").online, undefined);
+  assert.equal(isServerOnline(next.get("1"), Date.parse("2026-11-12T00:00:00Z")), false);
+});
+
+test("buildGroupIndex and scopedServers preserve multiple group memberships", () => {
+  const { byServer } = buildGroupIndex([
+    { group: { id: 1, name: "A" }, servers: [7] },
+    { group: { id: 2, name: "B" }, servers: [7] },
+  ]);
+  assert.equal(byServer.get("7").length, 2);
+  const servers = new Map([[7, { id: 7, name: "shared" }]]);
+  for (const groupId of [1, 2]) {
+    const scoped = scopedServers({ servers, groupId, byServerGroup: byServer });
+    assert.deepEqual(scoped.map(s => s.id), [7]);
+  }
+});
+
+test("resolveGroupSelection falls back to all for removed groups", () => {
+  const groups = [{ id: "1", name: "A" }, { id: "2", name: "B" }];
+  assert.equal(resolveGroupSelection("2", groups), "2");
+  assert.equal(resolveGroupSelection("deleted", groups), "all");
+  assert.equal(resolveGroupSelection("all", groups), "all");
+});
+
+
+test("resourceColor reserves warning and danger for high usage", () => {
+  assert.equal(resourceColor(6), "accent");
+  assert.equal(resourceColor(79.9), "accent");
+  assert.equal(resourceColor(80), "warning");
+  assert.equal(resourceColor(90), "danger");
+});
+
+test("formatRelativeTime renders compact localized ages", () => {
+  const now = Date.parse("2026-11-12T12:00:00Z");
+  assert.equal(formatRelativeTime("2026-11-12T11:59:40Z", now, "zh"), "刚刚");
+  assert.equal(formatRelativeTime("2026-11-12T11:55:00Z", now, "zh"), "5 分钟前");
+  assert.equal(formatRelativeTime("2026-11-12T09:00:00Z", now, "en"), "3h ago");
+  assert.equal(formatRelativeTime("", now, "zh"), "");
+});
+
+
+test("buildCycleTransfers exposes remaining quota", () => {
+  const [row] = buildCycleTransfers({
+    cycle_transfer_stats: {
+      "1": { name: "monthly", max: 1000, server_name: { "1": "demo" }, transfer: { "1": 800 } },
+    },
+  });
+  assert.equal(row.remaining, 200);
+});
+
+test("buildAttention includes cycle traffic at warning and critical thresholds", () => {
+  const { items } = buildAttention({
+    servers: [],
+    services: [],
+    alertRules: [],
+    cycleTransfers: [
+      { id: "1:1", serverName: "demo", cycle: "monthly", pct: 80, remaining: 200 },
+      { id: "2:2", serverName: "critical", cycle: "weekly", pct: 96, remaining: 40 },
+      { id: "3:3", serverName: "normal", cycle: "monthly", pct: 79, remaining: 210 },
+    ],
+  });
+  assert.equal(items.length, 2);
+  assert.equal(items[0].kind, "traffic");
+  assert.equal(items[0].severity, "warning");
+  assert.equal(items[1].severity, "critical");
+});
+
+test("detectTrafficThresholds reports only upward crossings and allows reset", () => {
+  const rows = [{ id: "1:1", pct: 79, serverName: "demo", cycle: "monthly" }];
+  let previous = new Map();
+  let result = detectTrafficThresholds(previous, rows);
+  assert.equal(result.crossed.length, 0);
+  previous = result.nextLevels;
+  rows[0].pct = 80;
+  result = detectTrafficThresholds(previous, rows);
+  assert.equal(result.crossed.length, 1);
+  assert.equal(result.crossed[0].level, 1);
+  result = detectTrafficThresholds(result.nextLevels, rows);
+  assert.equal(result.crossed.length, 0);
+  rows[0].pct = 95;
+  result = detectTrafficThresholds(result.nextLevels, rows);
+  assert.equal(result.crossed[0].level, 2);
+  rows[0].pct = 0;
+  result = detectTrafficThresholds(result.nextLevels, rows);
+  rows[0].pct = 82;
+  result = detectTrafficThresholds(result.nextLevels, rows);
+  assert.equal(result.crossed[0].level, 1);
+});
+
+test("filterServers matches name and public note case-insensitively", () => {
+  const list = [
+    { id: 1, name: "Tokyo", public_note: "production" },
+    { id: 2, name: "Frankfurt", public_note: "Backup" },
+  ];
+  assert.deepEqual(filterServers(list, "tok").map(s => s.id), [1]);
+  assert.deepEqual(filterServers(list, "back").map(s => s.id), [2]);
+  assert.equal(filterServers(list, " ").length, 2);
+});
+
+
+test("resolveWidgetServer accepts an ID or one case-insensitive exact name", () => {
+  const servers = new Map([
+    ["1", { id: 1, name: "Edge-One" }],
+    ["2", { id: 2, name: "Edge-Two" }],
+  ]);
+  assert.equal(resolveWidgetServer(servers, "2").server, servers.get("2"));
+  assert.equal(resolveWidgetServer(servers, "edge-one").server, servers.get("1"));
+  assert.equal(resolveWidgetServer(servers, " Edge-One ").status, "ok");
+});
+
+test("resolveWidgetServer reports empty, missing, and ambiguous selectors", () => {
+  const servers = new Map([
+    ["1", { id: 1, name: "duplicate" }],
+    ["2", { id: 2, name: "Duplicate" }],
+  ]);
+  assert.equal(resolveWidgetServer(servers, "").status, "empty");
+  assert.equal(resolveWidgetServer(servers, "missing").status, "missing");
+  assert.equal(resolveWidgetServer(servers, "DUPLICATE").status, "ambiguous");
 });

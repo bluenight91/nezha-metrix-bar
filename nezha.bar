@@ -1,6 +1,7 @@
 <bar protocol-version="0"
+     widget="true"
      category="monitoring"
-     version="1.2.0"
+     version="1.3.0"
      icon="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNMjEuMSAwdjE4Ni4yTDE1Mi40IDI2OCA0NjMuOCA3OC42IDQ0MS43IDc3VjB6IiBzdHlsZT0iZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojMGE5NGYyIi8+PHBhdGggZD0iTTE2My45IDM3MCAyMS4xIDI3OS45djEyOC4zTDIzMC43IDUxMmwyMDkuNi0xMDMuOFYxNzUuOEw0OTEgOTMuM3oiIHN0eWxlPSJmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOiMwMzM4ZDYiLz48L3N2Zz4="
      description="Monitor Nezha servers, service probes, and attention items from your menu bar."
      license="AGPL-3.0-only"
@@ -16,35 +17,82 @@
 
   <inputs>
     <input name="baseURL" type="string" label="Nezha Dashboard URL" placeholder="https://nezha.example.com" required="true"
-           help="Origin of your Nezha Dashboard (e.g. https://mon.example.com)." />
+           help="Origin of your Nezha Dashboard (e.g. https://mon.example.com).">
+      <locale lang="zh-Hans" label="哪吒 Dashboard 地址" help="你的哪吒监控 Dashboard 地址，例如 https://mon.example.com。" />
+    </input>
     <input name="apiToken" type="secret" label="API Token (PAT)"
-           help="Optional. Personal Access Token (nzp_…). Recommended scopes: nezha:inventory:read, nezha:server:read, nezha:service:read, and optionally nezha:alertrule:read. Required when force_auth is enabled." />
+           help="Optional. Personal Access Token (nzp_…). Recommended scopes: nezha:inventory:read, nezha:server:read, nezha:service:read, and optionally nezha:alertrule:read. Required when force_auth is enabled.">
+      <locale lang="zh-Hans" label="API Token（PAT）" help="可选。个人访问令牌（nzp_…）。建议权限：nezha:inventory:read、nezha:server:read、nezha:service:read，可选 nezha:alertrule:read。站点启用 force_auth 时必填。" />
+    </input>
     <input name="refreshInterval" type="select" label="Refresh Interval" default="5">
-      <option value="2" label="2s" />
-      <option value="5" label="5s" />
-      <option value="10" label="10s" />
-      <option value="30" label="30s" />
-      <option value="60" label="60s" />
+      <locale lang="zh-Hans" label="刷新间隔" />
+      <option value="2" label="2s"><locale lang="zh-Hans" label="2 秒" /></option>
+      <option value="5" label="5s"><locale lang="zh-Hans" label="5 秒" /></option>
+      <option value="10" label="10s"><locale lang="zh-Hans" label="10 秒" /></option>
+      <option value="30" label="30s"><locale lang="zh-Hans" label="30 秒" /></option>
+      <option value="60" label="60s"><locale lang="zh-Hans" label="60 秒" /></option>
+    </input>
+    <input name="liveUpdates" type="bool" label="Live WebSocket (Guest Mode)" default="true"
+           help="Use WebSocket for guest-accessible sites, with a REST reconciliation every 30s. Disable for REST-only polling. PAT mode always uses REST.">
+      <locale lang="zh-Hans" label="实时 WebSocket（游客模式）" help="游客可访问的站点使用 WebSocket，并每 30 秒通过 REST 对账。关闭后仅使用 REST 轮询；PAT 模式始终使用 REST。" />
     </input>
     <input name="trayFormat" type="select" label="Tray Display" default="online_total">
+      <locale lang="zh-Hans" label="菜单栏显示格式" />
       <option value="online_total" label="8/10 · 1.1M/s" />
       <option value="total" label="1.1M/s" />
-      <option value="online_both" label="8/10 · ↑Up ↓Down" />
+      <option value="online_both" label="8/10 · ↑Up ↓Down"><locale lang="zh-Hans" label="8/10 · ↑上行 ↓下行" /></option>
       <option value="online" label="8/10" />
     </input>
-    <input name="offlineNotify" type="bool" label="Offline Alerts" default="true" />
-    <input name="probeNotify" type="bool" label="Probe Down Alerts" default="true" />
+    <input name="widgetMode" type="select" label="Desktop Widget" default="overview"
+           help="Content shared by every desktop widget from this dashboard instance. Cards cannot be configured independently. Widget-only polling is limited to one-minute intervals.">
+      <locale lang="zh-Hans" label="桌面小组件内容" help="选择此看板实例所有桌面卡片显示的内容。同一实例的多张卡片不能分别设置；添加多张 Nezha 卡片会显示相同内容。小组件独立运行时最快每分钟刷新。" />
+      <option value="overview" label="Fleet Overview"><locale lang="zh-Hans" label="全部服务器总览" /></option>
+      <option value="server" label="Single Server"><locale lang="zh-Hans" label="单台服务器" /></option>
+      <option value="traffic" label="Cycle Traffic"><locale lang="zh-Hans" label="周期流量" /></option>
+      <option value="attention" label="Attention Items"><locale lang="zh-Hans" label="关注事项" /></option>
+    </input>
+    <input name="widgetServer" type="string" label="Widget Server ID or Unique Name"
+           help="Single Server mode only. Leave empty to follow the server selected in the panel, or enter an ID / case-insensitive unique full name. Ambiguous names require an ID.">
+      <locale lang="zh-Hans" label="小组件服务器（ID 或唯一名称）" help="仅单台服务器模式使用。留空时跟随面板当前选中的服务器；也可输入 ID 或不区分大小写的唯一完整名称，重名时必须使用 ID。" />
+    </input>
+    <input name="offlineNotify" type="bool" label="Offline Alerts" default="true">
+      <locale lang="zh-Hans" label="服务器离线通知" />
+    </input>
+    <input name="probeNotify" type="bool" label="Probe Down Alerts" default="true">
+      <locale lang="zh-Hans" label="服务探测失败通知" />
+    </input>
+    <input name="trafficNotify" type="bool" label="Cycle Traffic Alerts (80% / 95%)" default="true">
+      <locale lang="zh-Hans" label="周期流量提醒（80% / 95%）" />
+    </input>
   </inputs>
 
-  <docs><![CDATA[Connect to a Nezha Monitoring V2 Dashboard.
+  <docs><![CDATA[哪吒监控 V2 配置说明
+
+1. 在“哪吒 Dashboard 地址”填写你的实例地址（https://nezha.example.com）。
+2. 如果站点启用了 force_auth，或需要读取隐藏节点 / 告警规则，请在管理前端“设置 → API Tokens”创建 PAT，权限包含 nezha:inventory:read、nezha:server:read、nezha:service:read，可选 nezha:alertrule:read。
+3. 将 nzp_ 开头的令牌填入“API Token（PAT）”。令牌仅保存在系统凭据库中。
+
+游客模式仅在站点允许未登录读取时可用。本看板只读，不执行终端、文件管理或 MCP 写操作。
+
+实时更新：游客站点开启“实时 WebSocket”后，通过 /api/v1/ws/server 接收实时数据，并每 30 秒通过 REST 对账；关闭后仅使用 REST 轮询。PAT 模式始终使用 REST（Worker 的 WebSocket 无法携带 Authorization 头，将 PAT 放入 URL 会造成泄漏）。
+
+桌面小组件（Metrix.Bar 0.2.0+，macOS 14+）：
+1. 先在下方“桌面小组件内容”选择全部服务器总览、单台服务器、周期流量或关注事项。同一个 Nezha 看板实例的所有桌面卡片显示相同内容，不能给每张卡片分别选择模式。
+2. 选择“单台服务器”时，可以先在服务器面板点击目标服务器，并将“小组件服务器”留空；也可以手动输入服务器 ID 或不区分大小写的唯一完整名称。重名时必须使用 ID。
+3. 在 macOS 通知中心底部点击“编辑小组件”，搜索 Metrix.Bar 并选择 Nezha。支持小、中、大三种尺寸；点击卡片可打开或聚焦看板。
+4. 修改内容后会立即通知系统重绘。系统决定数据刷新时机，仅小组件保持活跃时最快每分钟更新一次，不保证秒级实时。
+
+English: Connect to a Nezha Monitoring V2 Dashboard.
 
 1. Set Nezha Dashboard URL to your instance origin (https://nezha.example.com).
 2. If the site enables force_auth or you need hidden nodes / alert rules, create a PAT in Settings → API Tokens with scopes: nezha:inventory:read, nezha:server:read, nezha:service:read (optional nezha:alertrule:read).
-3. Paste the nzp_ token into API Token.
+3. Paste the nzp_ token into API Token (PAT). The token is stored only in the system credential store.
 
 Guest mode only works when the Dashboard allows unauthenticated reads. This dashboard is read-only (no terminal / file / MCP actions).
 
-Live updates: on guest-accessible sites the dashboard streams /api/v1/ws/server; with a PAT it uses REST polling (Worker WebSockets cannot send an Authorization header, and a token in the URL would leak).]]></docs>
+Live updates: when Live WebSocket is enabled on guest-accessible sites, the dashboard streams /api/v1/ws/server and reconciles with REST every 30s. Disable it for REST-only polling. PAT mode always uses REST (Worker WebSockets cannot send an Authorization header, and a token in the URL would leak).
+
+Desktop widgets (Metrix.Bar 0.2.0+, macOS 14+): choose Fleet Overview, Single Server, Cycle Traffic, or Attention Items in Desktop Widget. Every card from this instance shows the same mode; per-card modes are not supported. In Single Server mode, leave Widget Server empty to follow the server selected in the panel, or enter an ID / unique full name. Add Metrix.Bar through the system widget picker and select Nezha; small, medium, and large cards are supported. Input changes invalidate the view immediately. The system controls data refresh timing and limits widget-only polling to one-minute intervals. Clicking a card opens or focuses the Nezha dashboard window.]]></docs>
 
   <script apis="app localStorage notification shell websocket"><![CDATA[
 
@@ -117,6 +165,7 @@ function mergeServerList(prevMap, list) {
     if (s.public_note === undefined && prev.public_note !== undefined) {
       merged.public_note = prev.public_note;
     }
+    if (s.online === undefined) delete merged.online;
     next.set(id, merged);
   }
   return next;
@@ -133,10 +182,21 @@ function buildGroupIndex(groupPayload) {
     const name = g.name || id;
     const servers = Array.isArray(item.servers) ? item.servers.map(String) : [];
     groups.push({ id, name, servers });
-    for (const sid of servers) byServer.set(String(sid), { id, name });
+    for (const sid of servers) {
+      const key = String(sid);
+      const memberships = byServer.get(key) || [];
+      if (!memberships.some(group => group.id === id)) memberships.push({ id, name });
+      byServer.set(key, memberships);
+    }
   }
   groups.sort((a, b) => a.name.localeCompare(b.name));
   return { groups, byServer };
+}
+
+function resolveGroupSelection(selectedGroup, groups) {
+  if (!selectedGroup || selectedGroup === "all") return "all";
+  const list = Array.isArray(groups) ? groups : [];
+  return list.some(g => String(g.id) === String(selectedGroup)) ? String(selectedGroup) : "all";
 }
 
 function scopedServers({
@@ -149,8 +209,8 @@ function scopedServers({
   let list = Array.from(servers.values());
   if (groupId && groupId !== "all") {
     list = list.filter(s => {
-      const g = byServerGroup.get(String(s.id));
-      return g && String(g.id) === String(groupId);
+      const memberships = byServerGroup.get(String(s.id)) || [];
+      return memberships.some(g => String(g.id) === String(groupId));
     });
   }
   if (watchMode === "starred" && watchlist && watchlist.size > 0) {
@@ -169,10 +229,12 @@ function summarizeScoped(list, nowMs = Date.now()) {
   let cpuN = 0;
   for (const s of list) {
     const on = isServerOnline(s, nowMs);
-    if (on) online += 1;
     const st = s.state || {};
-    netDown += Number(st.net_in_speed) || 0;
-    netUp += Number(st.net_out_speed) || 0;
+    if (on) {
+      online += 1;
+      netDown += Number(st.net_in_speed) || 0;
+      netUp += Number(st.net_out_speed) || 0;
+    }
     transferDown += Number(st.net_in_transfer) || 0;
     transferUp += Number(st.net_out_transfer) || 0;
     if (on && Number.isFinite(Number(st.cpu))) {
@@ -228,6 +290,28 @@ function pct(used, total) {
   return Math.max(0, Math.min(100, ((Number(used) || 0) / t) * 100));
 }
 
+function resourceColor(value) {
+  const n = Number(value) || 0;
+  if (n >= 90) return "danger";
+  if (n >= 80) return "warning";
+  return "accent";
+}
+
+function formatRelativeTime(iso, nowMs = Date.now(), locale = "zh") {
+  if (!iso) return "";
+  const time = Date.parse(iso);
+  if (!Number.isFinite(time)) return "";
+  const seconds = Math.max(0, Math.floor((nowMs - time) / 1000));
+  const zh = locale === "zh";
+  if (seconds < 60) return zh ? "刚刚" : "now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return zh ? `${minutes} 分钟前` : `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return zh ? `${hours} 小时前` : `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return zh ? `${days} 天前` : `${days}d ago`;
+}
+
 function serviceTypeLabel(type) {
   const t = Number(type);
   if (t === 1) return "HTTP";
@@ -268,11 +352,11 @@ function mergeServiceRows(listPayload, overviewPayload) {
     .sort((a, b) => Number(a.display_index || 0) - Number(b.display_index || 0) || String(a.name).localeCompare(String(b.name)));
 }
 
-function buildAttention({ servers, services, alertRules, nowMs = Date.now() }) {
+function buildAttention({ servers = [], services = [], alertRules = [], cycleTransfers = [], nowMs = Date.now() }) {
   const items = [];
   for (const s of servers) {
     if (!isServerOnline(s, nowMs)) {
-      items.push({ kind: "offline", id: `srv-${s.id}`, title: s.name || String(s.id), meta: s.last_active || "" });
+      items.push({ kind: "offline", id: `srv-${s.id}`, serverId: String(s.id), title: s.name || String(s.id), meta: s.last_active || "" });
     }
   }
   for (const svc of services) {
@@ -280,13 +364,55 @@ function buildAttention({ servers, services, alertRules, nowMs = Date.now() }) {
       items.push({
         kind: "probe",
         id: `svc-${svc.id}`,
+        serviceId: String(svc.id),
         title: svc.name,
         meta: `${svc.typeLabel} · down`,
       });
     }
   }
+  for (const c of cycleTransfers) {
+    if (c.pct < 80) continue;
+    items.push({
+      kind: "traffic",
+      id: `traffic-${c.id}`,
+      serverId: String(c.serverId),
+      title: c.serverName,
+      meta: `${c.cycle} · ${c.pct.toFixed(1)}% · ${formatBytes(c.remaining, 1, true)} left`,
+      severity: c.pct >= 95 ? "critical" : "warning",
+    });
+  }
   const rules = Array.isArray(alertRules) ? alertRules : [];
   return { items, rules };
+}
+
+function detectTrafficThresholds(previousLevels, cycleTransfers) {
+  const nextLevels = new Map();
+  const crossed = [];
+  for (const c of Array.isArray(cycleTransfers) ? cycleTransfers : []) {
+    const level = c.pct >= 95 ? 2 : c.pct >= 80 ? 1 : 0;
+    const previous = Number(previousLevels.get(c.id)) || 0;
+    nextLevels.set(c.id, level);
+    if (level > previous) crossed.push({ ...c, level });
+  }
+  return { nextLevels, crossed };
+}
+
+function filterServers(list, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return list;
+  return list.filter(s => `${s.name || s.id || ""}\n${s.public_note || ""}`.toLowerCase().includes(q));
+}
+
+function resolveWidgetServer(servers, selector) {
+  const list = Array.from((servers && typeof servers.values === "function" ? servers.values() : servers) || []);
+  const query = String(selector || "").trim();
+  if (!query) return { status: "empty" };
+  const byId = list.find(server => String(server && server.id) === query);
+  if (byId) return { status: "ok", server: byId };
+  const normalized = query.toLowerCase();
+  const matches = list.filter(server => String(server && server.name || "").toLowerCase() === normalized);
+  if (matches.length === 1) return { status: "ok", server: matches[0] };
+  return { status: matches.length > 1 ? "ambiguous" : "missing" };
 }
 
 function trayTitle(format, summary) {
@@ -329,6 +455,7 @@ function buildCycleTransfers(payload) {
         nextUpdate: String(nextUpdate[serverId] || ""),
         max,
         used,
+        remaining: Math.max(0, max - used),
         pct: Math.max(0, Math.min(100, (used / max) * 100)),
       });
     }
@@ -576,15 +703,27 @@ const T = () => I18N[locale] || I18N.zh;
 let baseURL = "";
 let apiToken = "";
 let refreshSec = 5;
+let liveUpdates = true;
 let trayFormat = "online_total";
+let widgetMode = "overview";
+let widgetServer = "";
 let offlineNotify = true;
 let probeNotify = true;
+let trafficNotify = true;
 let authMode = "guest";
 let wsDegraded = false;
 let forceAuthHint = false;
 let error = "";
 let loadedAt = 0;
 let inflight = false;
+const inflightDomains = new Set();
+const forcePending = new Set();
+const detailInflight = new Map();
+let lastServerRefresh = 0;
+let lastServiceRefresh = 0;
+let lastMetadataRefresh = 0;
+let lastAlertRefresh = 0;
+let connectionGeneration = 0;
 let settings = null;
 let servers = new Map();
 let groups = [];
@@ -595,6 +734,7 @@ let activeTab = localStorage.getItem("nezha.tab") || "servers";
 let selectedGroup = localStorage.getItem("nezha.group") || "all";
 let watchMode = localStorage.getItem("nezha.watchMode") || "all";
 let sortBy = localStorage.getItem("nezha.sort") || "cpu";
+let serverQuery = "";
 let selectedServerId = null;
 let detailPeriod = localStorage.getItem("nezha.period") || "1d";
 let metricsCache = new Map();
@@ -608,9 +748,13 @@ try {
 } catch {}
 let prevOnline = new Set();
 let prevFailing = new Set();
+let prevTrafficLevels = new Map();
 let hadSnapshot = false;
+let hadServiceSnapshot = false;
 let ws = null;
+let reconnectTimer = null;
 let lastTitle = "Nezha";
+let lastWidgetConfig = "";
 
 async function detectHostLocale() {
   try {
@@ -622,9 +766,47 @@ async function detectHostLocale() {
   } catch { locale = "zh"; }
 }
 
+function resetConnectionState() {
+  connectionGeneration += 1;
+  disconnectWS();
+  servers = new Map();
+  groups = [];
+  byServerGroup = new Map();
+  serviceRows = [];
+  alertRules = [];
+  cycleTransfers = [];
+  settings = null;
+  selectedServerId = null;
+  selectedServiceId = null;
+  metricsCache = new Map();
+  prevOnline = new Set();
+  prevFailing = new Set();
+  prevTrafficLevels = new Map();
+  hadSnapshot = false;
+  hadServiceSnapshot = false;
+  loadedAt = 0;
+  error = "";
+  forceAuthHint = false;
+  wsDegraded = false;
+  wsAttempts = 0;
+  wsEverOpened = false;
+  inflightDomains.clear();
+  forcePending.clear();
+  detailInflight.clear();
+  inflight = false;
+  lastServerRefresh = 0;
+  lastServiceRefresh = 0;
+  lastMetadataRefresh = 0;
+  lastAlertRefresh = 0;
+}
+
 function syncInputs(env) {
   const inputs = (env && env.inputs) || {};
-  baseURL = normalizeBaseURL(inputs.baseURL);
+  const nextBaseURL = normalizeBaseURL(inputs.baseURL);
+  if (nextBaseURL !== baseURL) {
+    baseURL = nextBaseURL;
+    resetConnectionState();
+  }
   let token = "";
   try { token = String($metrix.secret("apiToken") || "").trim(); } catch {}
   if (token !== apiToken) {
@@ -635,6 +817,14 @@ function syncInputs(env) {
     disconnectWS();
   }
   authMode = apiToken ? "pat" : "guest";
+  const nextLive = inputs.liveUpdates !== false && inputs.liveUpdates !== "false";
+  if (nextLive !== liveUpdates) {
+    liveUpdates = nextLive;
+    if (!liveUpdates || apiToken) {
+      disconnectWS();
+      wsDegraded = false;
+    }
+  }
   const nextSec = Math.max(2, Number(inputs.refreshInterval) || 5);
   if (nextSec !== refreshSec) {
     refreshSec = nextSec;
@@ -642,8 +832,15 @@ function syncInputs(env) {
   }
   const tf = String(inputs.trayFormat || "online_total");
   if (["online_total", "total", "online_both", "online"].includes(tf)) trayFormat = tf;
+  const wm = String(inputs.widgetMode || "overview");
+  widgetMode = ["overview", "server", "traffic", "attention"].includes(wm) ? wm : "overview";
+  widgetServer = String(inputs.widgetServer || "").trim();
+  const nextWidgetConfig = `${widgetMode}\n${widgetServer}`;
+  if (lastWidgetConfig && nextWidgetConfig !== lastWidgetConfig) $metrix.invalidate();
+  lastWidgetConfig = nextWidgetConfig;
   offlineNotify = inputs.offlineNotify !== false && inputs.offlineNotify !== "false";
   probeNotify = inputs.probeNotify !== false && inputs.probeNotify !== "false";
+  trafficNotify = inputs.trafficNotify !== false && inputs.trafficNotify !== "false";
 }
 
 function persistWatch() {
@@ -658,17 +855,29 @@ function authHeaders() {
 
 async function nezhaFetch(path) {
   if (!baseURL) throw new Error("missing url");
-  const res = await fetch(`${baseURL}${path}`, { headers: authHeaders() });
-  const text = await res.text();
-  let body;
-  try { body = JSON.parse(text); } catch { throw new Error(`HTTP ${res.status}`); }
-  if (res.status === 401 || res.status === 403) {
-    forceAuthHint = !apiToken;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(`${baseURL}${path}`, { headers: authHeaders(), signal: controller.signal });
+    const text = await res.text();
+    let body;
+    try { body = JSON.parse(text); } catch { throw new Error(`HTTP ${res.status}`); }
+    if (res.status === 401 || res.status === 403) forceAuthHint = !apiToken;
+    if (!res.ok) throw new Error(String(body && body.error || `HTTP ${res.status}`));
+    return unwrapNezha(body);
+  } catch (e) {
+    if (e && e.name === "AbortError") throw new Error("Request timeout");
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-  return unwrapNezha(body);
 }
 
 function disconnectWS() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   if (ws) {
     try { ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null; ws.close(); } catch {}
   }
@@ -680,12 +889,10 @@ let wsEverOpened = false;
 
 function connectWS() {
   disconnectWS();
-  // Worker WebSockets cannot attach an Authorization header, and putting the
-  // PAT in the URL would leak it into logs. So only guest-visible sites get
-  // the live stream; PAT mode relies on REST polling.
-  if (!baseURL || apiToken) return;
+  // PAT mode never uses WebSocket because Worker sockets cannot send Authorization.
+  if (!baseURL || apiToken || !liveUpdates) return;
   if (wsAttempts >= 3) {
-    wsDegraded = !wsEverOpened;
+    wsDegraded = true;
     return;
   }
   let url;
@@ -722,9 +929,13 @@ function connectWS() {
   ws.onclose = () => {
     ws = null;
     wsAttempts += 1;
-    wsDegraded = !wsEverOpened;
+    wsDegraded = true;
     $metrix.invalidate();
-    setTimeout(() => connectWS(), Math.max(5000, refreshSec * 1000));
+    const generation = connectionGeneration;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      if (generation === connectionGeneration) connectWS();
+    }, Math.max(5000, refreshSec * 1000));
   };
 }
 
@@ -738,46 +949,147 @@ function applyServers(list) {
   servers = mergeServerList(servers, list);
 }
 
-async function refreshAll() {
-  if (!baseURL || inflight) return;
+function beginDomain(name) {
+  if (inflightDomains.has(name)) return false;
+  inflightDomains.add(name);
   inflight = true;
-  error = "";
+  return true;
+}
+
+function endDomain(name) {
+  inflightDomains.delete(name);
+  inflight = inflightDomains.size > 0;
+  $metrix.invalidate();
+  if (forcePending.delete(name)) void runDomain(name);
+}
+
+function runDomain(name) {
+  if (name === "server") return refreshServers();
+  if (name === "services") return refreshServices();
+  if (name === "metadata") return refreshMetadata();
+  if (name === "alerts") return refreshAlertRules();
+  return Promise.resolve();
+}
+
+async function refreshServers() {
+  if (!beginDomain("server")) return;
+  const generation = connectionGeneration;
   try {
-    const tasks = [
-      nezhaFetch("/api/v1/setting").catch(e => { throw e; }),
-      nezhaFetch("/api/v1/server"),
-      nezhaFetch("/api/v1/server-group").catch(() => []),
-      nezhaFetch("/api/v1/service/list").catch(() => []),
-      nezhaFetch("/api/v1/service").catch(() => ({ services: {} })),
-    ];
-    if (apiToken) tasks.push(nezhaFetch("/api/v1/alert-rule").catch(() => []));
-    const results = await Promise.all(tasks);
-    settings = results[0] || {};
-    applyServers(results[1]);
-    applyGroups(results[2]);
-    serviceRows = mergeServiceRows(results[3], results[4]);
-    cycleTransfers = buildCycleTransfers(results[4]);
-    alertRules = apiToken ? (results[5] || []) : [];
+    const list = await nezhaFetch("/api/v1/server");
+    if (generation !== connectionGeneration) return;
+    applyServers(list);
     forceAuthHint = false;
+    error = "";
     loadedAt = Date.now();
+    lastServerRefresh = loadedAt;
     maybeNotify();
     hadSnapshot = true;
-    if (!apiToken && (!ws || ws.readyState > 1)) connectWS();
-    if (selectedServerId) {
-      const ck = `${selectedServerId}:${detailPeriod}`;
-      const ce = metricsCache.get(ck);
-      if (!ce || !ce.loadedAt || Date.now() - ce.loadedAt > 60000) void loadMetrics(selectedServerId);
-    }
   } catch (e) {
+    if (generation !== connectionGeneration) return;
     error = String(e && e.message || e);
     if (/unauthorized|401|ApiErrorUnauthorized/i.test(error) && !apiToken) forceAuthHint = true;
   } finally {
-    inflight = false;
-    $metrix.invalidate();
+    endDomain("server");
   }
 }
 
-function launchRefresh() { void refreshAll(); }
+async function refreshServices() {
+  if (!beginDomain("services")) return;
+  const generation = connectionGeneration;
+  try {
+    const [list, overview] = await Promise.all([
+      nezhaFetch("/api/v1/service/list").catch(() => []),
+      nezhaFetch("/api/v1/service").catch(() => ({ services: {} })),
+    ]);
+    if (generation !== connectionGeneration) return;
+    serviceRows = mergeServiceRows(list, overview);
+    cycleTransfers = buildCycleTransfers(overview);
+    lastServiceRefresh = Date.now();
+    const traffic = detectTrafficThresholds(prevTrafficLevels, cycleTransfers);
+    if (hadServiceSnapshot && trafficNotify) {
+      for (const c of traffic.crossed) {
+        try {
+          new Notification(locale === "zh" ? "哪吒 · 周期流量提醒" : "Nezha · Cycle traffic", {
+            body: `${c.serverName} · ${c.cycle} · ${c.pct.toFixed(1)}%`,
+            tag: `nezha-traffic-${c.id}-${c.level}`,
+          });
+        } catch {}
+      }
+    }
+    prevTrafficLevels = traffic.nextLevels;
+    maybeNotify();
+    hadServiceSnapshot = true;
+  } finally {
+    endDomain("services");
+  }
+}
+
+async function refreshMetadata() {
+  if (!beginDomain("metadata")) return;
+  const generation = connectionGeneration;
+  try {
+    const [nextSettings, groupPayload] = await Promise.all([
+      nezhaFetch("/api/v1/setting"),
+      nezhaFetch("/api/v1/server-group").catch(() => []),
+    ]);
+    if (generation !== connectionGeneration) return;
+    settings = nextSettings || {};
+    applyGroups(groupPayload);
+    lastMetadataRefresh = Date.now();
+  } catch (e) {
+    if (generation === connectionGeneration) error = String(e && e.message || e);
+  } finally {
+    endDomain("metadata");
+  }
+}
+
+async function refreshAlertRules() {
+  if (!apiToken || !beginDomain("alerts")) return;
+  const generation = connectionGeneration;
+  try {
+    const rules = await nezhaFetch("/api/v1/alert-rule").catch(() => []);
+    if (generation !== connectionGeneration) return;
+    alertRules = rules || [];
+    lastAlertRefresh = Date.now();
+  } finally {
+    endDomain("alerts");
+  }
+}
+
+async function refreshAll({ force = false } = {}) {
+  if (!baseURL) return;
+  if (force) {
+    for (const name of inflightDomains) forcePending.add(name);
+  }
+  const now = Date.now();
+  const initial = !lastServerRefresh;
+  const wsHealthy = liveUpdates && !apiToken && ws && ws.readyState === 1 && !wsDegraded;
+  const tasks = [];
+  if (force || initial || now - lastServerRefresh >= (wsHealthy ? 30000 : refreshSec * 1000)) {
+    tasks.push(refreshServers());
+  }
+  if (force || initial || now - lastServiceRefresh >= Math.max(15000, refreshSec * 1000)) {
+    tasks.push(refreshServices());
+  }
+  if (force || initial || now - lastMetadataRefresh >= 300000) tasks.push(refreshMetadata());
+  if (apiToken && (force || initial || now - lastAlertRefresh >= 60000)) tasks.push(refreshAlertRules());
+  await Promise.all(tasks);
+  if (liveUpdates && !apiToken && (!ws || ws.readyState > 1)) connectWS();
+  const detailIds = new Set();
+  if (selectedServerId) detailIds.add(String(selectedServerId));
+  if (widgetMode === "server") {
+    const selected = resolveWidgetServer(servers, widgetServer || selectedServerId || "");
+    if (selected.status === "ok") detailIds.add(String(selected.server.id));
+  }
+  for (const id of detailIds) {
+    const key = `${id}:${detailPeriod}`;
+    const cached = metricsCache.get(key);
+    if (!cached || !cached.loadedAt || Date.now() - cached.loadedAt > 60000) void loadMetrics(id);
+  }
+  $metrix.invalidate();
+}
+
+function launchRefresh() { void refreshAll({ force: true }); }
 
 function maybeNotify() {
   const t = T();
@@ -800,7 +1112,7 @@ function maybeNotify() {
   for (const svc of serviceRows) {
     if (svc.failing) nextFail.add(String(svc.id));
   }
-  if (hadSnapshot && probeNotify) {
+  if (hadServiceSnapshot && probeNotify) {
     for (const id of nextFail) {
       if (!prevFailing.has(id)) {
         const svc = serviceRows.find(x => String(x.id) === id);
@@ -813,14 +1125,15 @@ function maybeNotify() {
   prevFailing = nextFail;
 }
 
-function currentScoped() {
-  return scopedServers({
+function currentScoped(applySearch = false) {
+  const scoped = scopedServers({
     servers,
-    groupId: selectedGroup,
+    groupId: resolveGroupSelection(selectedGroup, groups),
     watchMode,
     watchlist,
     byServerGroup,
   });
+  return applySearch && servers.size > 6 ? filterServers(scoped, serverQuery) : scoped;
 }
 
 function sortServers(list) {
@@ -837,42 +1150,61 @@ function sortServers(list) {
 }
 
 function capsuleBar(pctVal, color) {
-  const p = Math.max(0, Math.min(100, Number(pctVal)||0));
-  const filled = p > 0 ? Math.max(1, Math.round((p / 100) * 14)) : 0;
-  const cells = [];
-  for (let i = 0; i < 14; i++) {
-    cells.push(h("Box", { key: `b${i}`, tw: `h-1.5 rounded-[1.5px] grow basis-0 bg-${i < filled ? color : "border"}` }));
-  }
-  return h("Row", { tw: "gap-[2.5px] items-center w-full" }, cells);
+  const p = Math.max(0, Math.min(100, Number(pctVal) || 0));
+  return h("Row", { tw: "h-1.5 w-full rounded-full bg-border overflow-hidden" },
+    p > 0 ? h("Box", { key: "progress-fill", tw: `h-full w-[${p}%] bg-${color}` }) : null
+  );
 }
 
-async function loadMetrics(serverId) {
-  const key = `${serverId}:${detailPeriod}`;
-  const prev = metricsCache.get(key) || {};
-  metricsCache.set(key, { ...prev, loading: true, error: "" });
-  $metrix.invalidate();
-  try {
-    const metrics = ["cpu", "memory", "net_in_speed", "net_out_speed"];
-    const out = {};
-    for (const m of metrics) {
-      const data = await nezhaFetch(`/api/v1/server/${serverId}/metrics?metric=${m}&period=${detailPeriod}`);
-      out[m] = Array.isArray(data && data.data_points) ? data.data_points : [];
-    }
-    const days = detailPeriod === "7d" ? 7 : 1;
-    const monitorsPayload = await nezhaFetch(`/api/v1/server/${serverId}/service`).catch(() => []);
-    const onlinePayload = await nezhaFetch(`/api/v1/server/${serverId}/online-history?days=${days}`).catch(() => null);
-    metricsCache.set(key, {
-      loading: false,
-      error: "",
-      series: out,
-      monitors: Array.isArray(monitorsPayload) ? monitorsPayload : (monitorsPayload && monitorsPayload.data) || [],
-      online: onlinePayload && typeof onlinePayload === "object" ? (onlinePayload.data || onlinePayload) : null,
-      loadedAt: Date.now(),
-    });
-  } catch (e) {
-    metricsCache.set(key, { loading: false, error: String(e.message || e), series: {}, loadedAt: Date.now() });
+function setMetricsCache(key, value) {
+  metricsCache.delete(key);
+  metricsCache.set(key, value);
+  while (metricsCache.size > 8) {
+    metricsCache.delete(metricsCache.keys().next().value);
   }
+}
+
+function loadMetrics(serverId, period = detailPeriod) {
+  const key = `${serverId}:${period}`;
+  if (detailInflight.has(key)) return detailInflight.get(key);
+  const generation = connectionGeneration;
+  const prev = metricsCache.get(key) || {};
+  setMetricsCache(key, { ...prev, loading: true, error: "" });
   $metrix.invalidate();
+  const promise = (async () => {
+    try {
+      const metrics = ["cpu", "memory", "net_in_speed", "net_out_speed"];
+      const days = period === "7d" ? 7 : 1;
+      const [metricValues, monitorsPayload, onlinePayload] = await Promise.all([
+        Promise.all(metrics.map(async m => {
+          const data = await nezhaFetch(`/api/v1/server/${serverId}/metrics?metric=${m}&period=${period}`);
+          return [m, Array.isArray(data && data.data_points) ? data.data_points.slice(-120) : []];
+        })),
+        nezhaFetch(`/api/v1/server/${serverId}/service`).catch(() => []),
+        nezhaFetch(`/api/v1/server/${serverId}/online-history?days=${days}`).catch(() => null),
+      ]);
+      if (generation !== connectionGeneration) return;
+      const monitors = Array.isArray(monitorsPayload) ? monitorsPayload : (monitorsPayload && monitorsPayload.data) || [];
+      const monitorRows = buildMonitorRows(monitors).map(r => ({ ...r, points: r.points.slice(-120) }));
+      setMetricsCache(key, {
+        loading: false,
+        error: "",
+        series: Object.fromEntries(metricValues),
+        monitorRows,
+        online: onlinePayload && typeof onlinePayload === "object" ? (onlinePayload.data || onlinePayload) : null,
+        loadedAt: Date.now(),
+      });
+    } catch (e) {
+      if (generation !== connectionGeneration) return;
+      const current = metricsCache.get(key) || prev;
+      setMetricsCache(key, { ...current, loading: false, error: String(e.message || e), loadedAt: Date.now() });
+    } finally {
+      if (detailInflight.get(key) === promise) detailInflight.delete(key);
+      $metrix.invalidate();
+    }
+  })();
+  detailInflight.set(key, promise);
+  return promise;
 }
 
 function chartFromPoints(points, name) {
@@ -888,10 +1220,40 @@ function chartFromPoints(points, name) {
 // Layout shell: fixed header + scrollable body (native flyout)
 // ---------------------------------------------------------------------------
 
+const SERVER_LAYOUT = {
+  chrome: 340,
+  search: 36,
+  empty: 20,
+  card: 100,
+  rowGap: 10,
+  error: 43,
+  degraded: 24,
+};
+
+function serverPanelHeight(rowCount, { searchable, hasError, degraded }) {
+  const rows = Math.min(4, Math.max(0, rowCount));
+  const content = rows ? rows * SERVER_LAYOUT.card + (rows - 1) * SERVER_LAYOUT.rowGap : SERVER_LAYOUT.empty;
+  return SERVER_LAYOUT.chrome + (searchable ? SERVER_LAYOUT.search : 0) + content +
+    (hasError ? SERVER_LAYOUT.error : 0) + (degraded ? SERVER_LAYOUT.degraded : 0);
+}
+
 function panelShell(header, body, estContentH, minH, maxH) {
   const hDip = Math.round(
     Math.max(minH == null ? 420 : minH, Math.min(maxH == null ? 760 : maxH, (estContentH == null ? 600 : estContentH)))
   );
+  const statusBody = [
+    ...body,
+    error && loadedAt ? h("Row", { tw: "gap-2 p-2.5 rounded-lg bg-surface items-center w-full" },
+      TX(error, { tw: "text-[10.5px] text-danger grow min-w-0 line-clamp-1" }),
+      h("Button", { text: T().retry, onClick: launchRefresh, tw: "text-[10px]" })
+    ) : null,
+    loadedAt ? h("Row", { tw: "items-center w-full" },
+      h("Spacer"),
+      TX(`${apiToken || !liveUpdates || wsDegraded ? "REST" : "Live"} · ${formatMonthDayTime(new Date(loadedAt).toISOString())}`, {
+        tw: "text-[9px] text-textMuted tabular-nums",
+      })
+    ) : null,
+  ];
   return h(
     "Column",
     { preferredWidth: 500, preferredHeight: hDip, fill: true, minHeight: 0, safeArea: true, tw: "gap-0" },
@@ -899,7 +1261,7 @@ function panelShell(header, body, estContentH, minH, maxH) {
     h(
       "Scroll",
       { grow: 1, minHeight: 0, fillWidth: true, tw: "px-4 pb-4" },
-      h("Column", { tw: "gap-2.5 w-full" }, ...body)
+      h("Column", { tw: "gap-2.5 w-full" }, ...statusBody)
     )
   );
 }
@@ -967,8 +1329,10 @@ function statCell(value, label, color, key) {
 
 function overviewCard() {
   const t = T();
-  const scoped = currentScoped();
+  const scoped = currentScoped(true);
   const s = summarizeScoped(scoped);
+  const unfilteredTotal = currentScoped().length;
+  const searchActive = servers.size > 6 && serverQuery.trim() && s.total !== unfilteredTotal;
   const probesDown = serviceRows.filter(r => r.failing).length;
   const issues = s.offline + probesDown;
   const onlineRate = s.total > 0 ? (s.online / s.total) * 100 : 0;
@@ -978,7 +1342,7 @@ function overviewCard() {
     h(
       "Row",
       { tw: "items-end gap-3 w-full" },
-      statCell(`${s.online}/${s.total}`, t.online, s.offline > 0 ? "warning" : "success", "ov-online"),
+      statCell(`${s.online}/${s.total}`, searchActive ? `${t.online} · ${s.total}/${unfilteredTotal}` : t.online, s.offline > 0 ? "warning" : "success", "ov-online"),
       statCell(`↓${formatRate(s.netDown, true)}`, t.downRate || "下行", "text", "ov-down"),
       statCell(`↑${formatRate(s.netUp, true)}`, t.upRate || "上行", "text", "ov-up"),
       statCell(`${s.avgCpu.toFixed(0)}%`, "Avg CPU", "accent", "ov-cpu")
@@ -1001,12 +1365,24 @@ function overviewCard() {
 function serversToolbar() {
   const t = T();
   const groupItems = [{ label: t.all, value: "all" }, ...groups.map(g => ({ label: g.name, value: g.id }))];
+  const groupValue = resolveGroupSelection(selectedGroup, groups);
+  const selectGroup = v => {
+    selectedGroup = String(v || "all");
+    localStorage.setItem("nezha.group", selectedGroup);
+    $metrix.invalidate();
+  };
   return h("Column", { tw: "gap-2 w-full" },
-    groupItems.length > 1 ? h("Segmented", {
+    groupItems.length > 1 ? h(groupItems.length > 8 ? "Select" : "Segmented", {
       key: "groups",
-      items: groupItems.slice(0, 8),
-      value: groupItems.some(g => g.value === selectedGroup) ? selectedGroup : "all",
-      onChange: v => { selectedGroup = String(v||"all"); localStorage.setItem("nezha.group", selectedGroup); $metrix.invalidate(); },
+      items: groupItems,
+      value: groupValue,
+      onChange: selectGroup,
+    }) : null,
+    servers.size > 6 ? h("SearchField", {
+      key: "server-search",
+      value: serverQuery,
+      placeholder: locale === "zh" ? "搜索名称或备注" : "Search name or note",
+      onChange: v => { serverQuery = String(v || ""); $metrix.invalidate(); },
     }) : null,
     h("Row", { tw: "gap-2 items-center w-full" },
       h("Segmented", {
@@ -1053,6 +1429,7 @@ function serverCard(s) {
     "Column",
     {
       key: `srv-${id}`,
+      height: SERVER_LAYOUT.card,
       tw: "gap-1.5 p-2.5 rounded-xl bg-surface border border-border grow basis-0 min-w-0",
       onClick: () => {
         selectedServerId = id;
@@ -1076,20 +1453,22 @@ function serverCard(s) {
       })
     ),
     h("Row", { tw: "items-center gap-1.5 w-full" },
-      TX(`C ${cpuPct.toFixed(0)}%`, { tw: "text-[10px] tabular-nums text-accent font-semibold" }),
-      TX(`M ${memPct.toFixed(0)}%`, { tw: "text-[10px] tabular-nums text-success font-semibold" }),
+      TX(`C ${cpuPct.toFixed(0)}%`, { tw: `text-[10px] tabular-nums font-semibold text-${on ? resourceColor(cpuPct) : "textMuted"}` }),
+      TX(`M ${memPct.toFixed(0)}%`, { tw: `text-[10px] tabular-nums font-semibold text-${on ? resourceColor(memPct) : "textMuted"}` }),
       h("Spacer"),
-      TX(`D ${diskPct.toFixed(0)}%`, { tw: `text-[10px] tabular-nums font-semibold text-${diskPct >= 85 ? "danger" : "warning"}` })
+      TX(`D ${diskPct.toFixed(0)}%`, { tw: `text-[10px] tabular-nums font-semibold text-${on ? resourceColor(diskPct) : "textMuted"}` })
     ),
     h("Row", { tw: "gap-1 w-full" },
-      capsuleBar(cpuPct, "accent"),
-      capsuleBar(memPct, "success")
+      capsuleBar(cpuPct, on ? resourceColor(cpuPct) : "border"),
+      capsuleBar(memPct, on ? resourceColor(memPct) : "border")
     ),
     h("Row", { tw: "items-center gap-1.5 w-full" },
       TX(`↓${formatRate(st.net_in_speed, true)}`, { tw: "text-[9.5px] tabular-nums text-textMuted" }),
       TX(`↑${formatRate(st.net_out_speed, true)}`, { tw: "text-[9.5px] tabular-nums text-textMuted" }),
       h("Spacer"),
-      TX(on ? `${Number(st.load_1 || 0).toFixed(2)}` : t.offline, { tw: `text-[9.5px] tabular-nums ${on ? "text-textMuted" : "text-danger"}` })
+      TX(on ? `${Number(st.load_1 || 0).toFixed(2)}` : `${t.offline} · ${formatRelativeTime(s.last_active, Date.now(), locale)}`, {
+        tw: `text-[9.5px] tabular-nums ${on ? "text-textMuted" : "text-danger"}`,
+      })
     ),
     h("Row", { tw: "items-center gap-1.5 w-full" },
       TX(`↓${formatBytes(st.net_in_transfer, 1, true)}`, { tw: "text-[9.5px] tabular-nums text-textMuted" }),
@@ -1119,15 +1498,21 @@ function serversPanel() {
     const s = servers.get(String(selectedServerId));
     if (s) return serverDetail(s);
   }
-  const list = sortServers(currentScoped());
+  const list = sortServers(currentScoped(true));
   const body = list.length
     ? serverGrid(list)
     : [TX(t.emptyServers, { tw: "text-[12px] text-textMuted" })];
-  const est = 318 + Math.ceil(list.length / 2) * 126;
+  const height = serverPanelHeight(Math.ceil(list.length / 2), {
+    searchable: servers.size > 6,
+    hasError: Boolean(error && loadedAt),
+    degraded: wsDegraded,
+  });
   return panelShell(
     [brandHeader(), topTabs(), overviewCard(), serversToolbar()],
-    wsDegraded ? [TX(t.wsDegraded, { tw: "text-[11px] text-warning" }), ...body] : body,
-    est
+    wsDegraded ? [TX(t.wsDegraded, { tw: "text-[11px] text-warning line-clamp-1" }), ...body] : body,
+    height,
+    0,
+    height
   );
 }
 
@@ -1159,7 +1544,7 @@ function serverDetail(s) {
   const networkCharts = [netIn, netOut].filter(Boolean);
   const memPct = pct(st.mem_used, host.mem_total);
   const diskPct = pct(st.disk_used, host.disk_total);
-  const monitorRows = buildMonitorRows(cache.monitors);
+  const monitorRows = cache.monitorRows || [];
   const latencyCharts = monitorRows
     .filter(r => r.points.length)
     .slice(0, 8)
@@ -1208,18 +1593,26 @@ function serverDetail(s) {
           : null
       )
     : null;
+  const on = isServerOnline(s);
   const body = [
     h("Column", { tw: "gap-2.5 p-3 rounded-xl bg-surface w-full" },
       h("Row", { tw: "items-end gap-3 w-full" },
-        statCell(`${Number(st.cpu || 0).toFixed(0)}%`, "CPU", "accent", "d-cpu"),
-        statCell(`${memPct.toFixed(0)}%`, "MEM", "success", "d-mem"),
-        statCell(`${diskPct.toFixed(0)}%`, "DISK", diskPct >= 85 ? "danger" : "warning", "d-disk")
+        statCell(`${Number(st.cpu || 0).toFixed(0)}%`, "CPU", resourceColor(Number(st.cpu || 0)), "d-cpu"),
+        statCell(`${memPct.toFixed(0)}%`, "MEM", resourceColor(memPct), "d-mem"),
+        statCell(`${diskPct.toFixed(0)}%`, "DISK", resourceColor(diskPct), "d-disk"),
+        statCell(on ? t.online : t.offline, t.onlineSec, on ? "success" : "danger", "d-online")
       ),
       TX(`${host.platform || "?"} ${host.platform_version || ""} · ${host.arch || ""}`, { tw: "text-[10.5px] text-textMuted" }),
-      TX(`↓ ${formatRate(st.net_in_speed)} · ↑ ${formatRate(st.net_out_speed)} · load ${Number(st.load_1 || 0).toFixed(2)} / ${Number(st.load_5 || 0).toFixed(2)} / ${Number(st.load_15 || 0).toFixed(2)}`, { tw: "text-[10.5px] tabular-nums text-textMuted" })
+      TX(`↓ ${formatRate(st.net_in_speed)} · ↑ ${formatRate(st.net_out_speed)} · load ${Number(st.load_1 || 0).toFixed(2)} / ${Number(st.load_5 || 0).toFixed(2)} / ${Number(st.load_15 || 0).toFixed(2)}`, { tw: "text-[10.5px] tabular-nums text-textMuted" }),
+      TX(`${t.transfer}  ↓${formatBytes(st.net_in_transfer, 1, true)}  ↑${formatBytes(st.net_out_transfer, 1, true)}`, {
+        tw: "text-[10.5px] tabular-nums text-textMuted",
+      })
     ),
-    cache.loading ? TX(t.loading, { tw: "text-[12px] text-textMuted" }) : null,
-    cache.error ? TX(cache.error, { tw: "text-[12px] text-danger" }) : null,
+    cache.loading ? h("Row", { tw: "items-center gap-2" }, h("Spinner", { tw: "size-[12px]" }), TX(t.loading, { tw: "text-[12px] text-textMuted" })) : null,
+    cache.error ? h("Row", { tw: "items-center gap-2" },
+      TX(cache.error, { tw: "text-[12px] text-danger grow min-w-0" }),
+      h("Button", { text: t.retry, onClick: () => { void loadMetrics(s.id); }, tw: "text-[10px]" })
+    ) : null,
     resourceCharts.length ? metricChart(resourceCharts, "area", 150) : null,
     networkCharts.length ? metricChart(networkCharts, "line", 150) : null,
     monitorRows.length
@@ -1228,7 +1621,7 @@ function serverDetail(s) {
           latencyCharts.length ? metricChart(latencyCharts, "line", 150) : null,
           ...monitorGrid
         )
-      : (!cache.loading && cache.monitors ? TX(t.latencyEmpty, { tw: "text-[11px] text-textMuted" }) : null),
+      : (!cache.loading && cache.monitorRows ? TX(t.latencyEmpty, { tw: "text-[11px] text-textMuted" }) : null),
     onlineSection,
     !cache.loading && !resourceCharts.length && !networkCharts.length
       ? TX(t.noMetrics, { tw: "text-[12px] text-textMuted" })
@@ -1260,7 +1653,7 @@ function serviceRow(r) {
     "Column",
     {
       key: `svc-${r.id}`,
-      tw: `gap-1.5 p-3 rounded-xl bg-surface w-full ${r.failing ? "border border-danger" : ""}`,
+      tw: `gap-1.5 p-3 rounded-xl bg-surface w-full ${r.failing ? "border border-danger" : selectedServiceId === String(r.id) ? "border border-accent" : ""}`,
     },
     h(
       "Row",
@@ -1335,6 +1728,9 @@ function cycleCard(c) {
     TX(`${formatBytes(c.used, 1, true)} / ${formatBytes(c.max, 1, true)}`, {
       tw: "text-[11px] font-semibold tabular-nums",
     }),
+    TX(`${locale === "zh" ? "剩余" : "Remaining"} ${formatBytes(c.remaining, 1, true)}`, {
+      tw: "text-[9.5px] tabular-nums text-textMuted",
+    }),
     capsuleBar(c.pct, color),
     h("Row", { tw: "items-center gap-1 w-full" },
       TX(`${formatMonthDay(c.from)} - ${formatMonthDay(c.to)}`, { tw: "text-[9px] tabular-nums text-textMuted truncate" }),
@@ -1363,21 +1759,42 @@ function trafficPanel() {
       })
     : [TX(t.emptyTraffic, { tw: "text-[12px] text-textMuted" })];
   const rowCount = Math.ceil(cycleTransfers.length / 2);
-  return panelShell([brandHeader(), topTabs(), summary], body, 232 + rowCount * 118);
+  return panelShell([brandHeader(), topTabs(), summary], body, 232 + rowCount * 136);
 }
 
 function attentionRow(it) {
+  const critical = it.kind === "offline" || it.severity === "critical";
+  const color = critical ? "danger" : "warning";
   return h(
     "Column",
     {
       key: it.id,
-      tw: `gap-1 p-3 rounded-xl bg-surface w-full border ${it.kind === "offline" ? "border-danger" : "border-warning"}`,
+      tw: `gap-1 p-3 rounded-xl bg-surface w-full border border-${color} cursor-pointer`,
+      onClick: () => {
+        if (it.serverId) {
+          activeTab = "servers";
+          selectedServerId = String(it.serverId);
+          selectedServiceId = null;
+          localStorage.setItem("nezha.tab", activeTab);
+          void loadMetrics(selectedServerId);
+        } else if (it.serviceId) {
+          activeTab = "services";
+          selectedServiceId = String(it.serviceId);
+          selectedServerId = null;
+          localStorage.setItem("nezha.tab", activeTab);
+        }
+        $metrix.invalidate();
+      },
     },
     h("Row", { tw: "items-center gap-2 w-full" },
-      TX(it.kind === "offline" ? "●" : "▲", { tw: `text-[10px] text-${it.kind === "offline" ? "danger" : "warning"}` }),
-      TX(it.title, { tw: "text-[12.5px] font-bold truncate" })
+      TX(it.kind === "offline" ? "●" : it.kind === "traffic" ? "◆" : "▲", { tw: `text-[10px] text-${color}` }),
+      TX(it.title, { tw: "text-[12.5px] font-bold truncate" }),
+      h("Spacer"),
+      TX(it.kind === "traffic" ? "Traffic" : it.kind === "probe" ? "Probe" : "Offline", { tw: `text-[9px] text-${color}` })
     ),
-    TX(it.meta || it.kind, { tw: "text-[10.5px] text-textMuted" })
+    TX(it.kind === "offline" ? formatRelativeTime(it.meta, Date.now(), locale) || it.meta : it.meta || it.kind, {
+      tw: "text-[10.5px] text-textMuted",
+    })
   );
 }
 
@@ -1401,6 +1818,7 @@ function alertsPanelFn() {
     servers: scoped,
     services: serviceRows,
     alertRules,
+    cycleTransfers,
     nowMs: Date.now(),
   });
   const summary = h(
@@ -1413,12 +1831,12 @@ function alertsPanelFn() {
   );
   const attention = items.length ? items.map(attentionRow) : [TX(t.emptyAlerts, { tw: "text-[12px] text-textMuted" })];
   const rulesBody = rules.length
-    ? [TX(t.rules, { tw: "text-[11px] font-bold text-textMuted" }), ...rules.slice(0, 12).map(ruleRow)]
+    ? [TX(t.rules, { tw: "text-[11px] font-bold text-textMuted" }), ...rules.map(ruleRow)]
     : [];
   return panelShell(
     [brandHeader(), topTabs(), summary],
     [...attention, ...rulesBody],
-    236 + items.length * 76 + Math.min(rules.length, 12) * 52
+    236 + items.length * 76 + rules.length * 52
   );
 }
 
@@ -1454,6 +1872,235 @@ function panelTree() {
 }
 
 
+const WTX = (text, props) => h("Text", { text: String(text), ...(props || {}) });
+const widgetColor = value => value === "danger" ? "error" : value;
+
+function widgetHeader(title, badge) {
+  return h("Row", { gap: 6, alignItems: "center" },
+    h("Icon", { svg: BRAND, size: 15, color: "accent" }),
+    WTX(title, { fontSize: 13, fontWeight: 600, maxLines: 1 }),
+    h("Spacer"),
+    badge ? h("Badge", { text: badge, fontSize: 10 }) : null
+  );
+}
+
+function widgetMessage(title, detail) {
+  return h("Column", { gap: 8 },
+    widgetHeader(title),
+    h("Spacer"),
+    WTX(detail, { fontSize: 12, color: "secondary", textAlign: "center", maxLines: 4 }),
+    h("Spacer")
+  );
+}
+
+function widgetStat(value, label, color, size = 20) {
+  return h("Column", { gap: 2 },
+    WTX(value, { fontSize: size, fontWeight: 700, color: color || "primary", maxLines: 1 }),
+    WTX(label, { fontSize: 10, color: "secondary", maxLines: 1 })
+  );
+}
+
+function widgetProgress(value, color) {
+  return h("Progress", { value: Math.max(0, Math.min(100, Number(value) || 0)) / 100, color: widgetColor(color || "accent") });
+}
+
+function formatWidgetRate(bytesPerSecond) {
+  let value = Math.abs(Number(bytesPerSecond) || 0);
+  const units = ["B/s", "K/s", "M/s", "G/s", "T/s"];
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const digits = value >= 10 ? 0 : value >= 1 ? 1 : 2;
+  return `${value.toFixed(digits)}${units[unit]}`;
+}
+
+function widgetRates(summary) {
+  return h("Row", { gap: 12 },
+    WTX(`↓${formatWidgetRate(summary.netDown)}`, { fontSize: 11, fontWeight: 600, maxLines: 1 }),
+    WTX(`↑${formatWidgetRate(summary.netUp)}`, { fontSize: 11, fontWeight: 600, maxLines: 1 })
+  );
+}
+
+function widgetTransfer(summary) {
+  return WTX(`累计 ↓${formatBytes(summary.transferDown, 1, true)}  ↑${formatBytes(summary.transferUp, 1, true)}`, {
+    fontSize: 11, color: "secondary", maxLines: 1,
+  });
+}
+
+function overviewWidget(family) {
+  const summary = summarizeScoped(Array.from(servers.values()));
+  const attention = buildAttention({ servers: Array.from(servers.values()), services: serviceRows, alertRules, cycleTransfers }).items;
+  const heading = widgetHeader("Nezha", `${summary.online}/${summary.total}`);
+  const statusText = WTX(summary.offline ? `${summary.offline} 台离线` : "全部在线", {
+    fontSize: 10, color: summary.offline ? "warning" : "secondary", maxLines: 1,
+  });
+  if (family === "small") {
+    const windows = $metrix.platform === "windows";
+    return h("Column", { gap: windows ? 6 : 8 }, heading, windows ? null : h("Spacer"),
+      widgetStat(`${summary.online}/${summary.total}`, "在线", summary.offline ? "warning" : "success", windows ? 24 : 28),
+      widgetRates(summary), statusText,
+      windows ? null : h("Spacer")
+    );
+  }
+  const stats = h("Grid", { key: "widget-overview-stats", columns: 2, gap: 10 },
+    widgetStat(`${summary.online}/${summary.total}`, "在线", summary.offline ? "warning" : "success"),
+    widgetStat(`↓${formatWidgetRate(summary.netDown)}`, "下行"),
+    widgetStat(`↑${formatWidgetRate(summary.netUp)}`, "上行"),
+    widgetStat(`${summary.avgCpu.toFixed(0)}%`, "Avg CPU", "accent")
+  );
+  if (family === "medium") return h("Column", { gap: 8 }, heading, stats,
+    h("Row", { key: "widget-overview-footer", gap: 8 }, widgetTransfer(summary), h("Spacer"), statusText)
+  );
+  const topCpu = Array.from(servers.values()).filter(server => isServerOnline(server)).sort((a, b) => Number(b.state?.cpu || 0) - Number(a.state?.cpu || 0)).slice(0, 3);
+  return h("Column", { gap: 10 }, heading, stats, widgetTransfer(summary), statusText,
+    h("Divider"),
+    h("Row", { gap: 8 },
+      WTX("CPU 较高", { fontSize: 11, fontWeight: 600, color: "secondary" }),
+      h("Spacer"),
+      WTX(`${attention.length} 项关注`, { fontSize: 11, color: attention.length ? "warning" : "secondary" })
+    ),
+    topCpu.length ? topCpu.map(server => h("Row", { key: `widget-cpu-${server.id}`, gap: 8, alignItems: "center" },
+      WTX(server.name || server.id, { fontSize: 11, maxLines: 1 }),
+      h("Spacer"),
+      WTX(`${Number(server.state?.cpu || 0).toFixed(0)}%`, { fontSize: 11, fontWeight: 600, color: widgetColor(resourceColor(server.state?.cpu)) })
+    )) : WTX("暂无在线实例", { fontSize: 11, color: "secondary" })
+  );
+}
+
+function widgetCompactResources(server) {
+  const state = server.state || {};
+  const host = server.host || {};
+  const resources = [
+    ["MEM", pct(state.mem_used, host.mem_total)],
+    ["DISK", pct(state.disk_used, host.disk_total)],
+  ];
+  return h("Grid", { key: "widget-server-compact-resources", columns: 2, gap: 8 }, resources.map(([label, value]) =>
+    h("Column", { gap: 3 },
+      WTX(`${label} ${value.toFixed(0)}%`, { fontSize: 10, fontWeight: 600, color: widgetColor(resourceColor(value)), maxLines: 1 }),
+      widgetProgress(value, resourceColor(value))
+    )
+  ));
+}
+
+function widgetDiskRow(server) {
+  const value = pct(server.state?.disk_used, server.host?.disk_total);
+  return h("Column", { key: "widget-server-disk", gap: 3 },
+    WTX(`DISK ${value.toFixed(0)}%`, { fontSize: 10, fontWeight: 600, color: widgetColor(resourceColor(value)), maxLines: 1 }),
+    widgetProgress(value, resourceColor(value))
+  );
+}
+
+function widgetChartSeries(points, color) {
+  return { color, points: (points || []).slice(-120).map(point => ({ y: Number(point.value) || 0 })) };
+}
+
+function serverWidget(family) {
+  const resolved = resolveWidgetServer(servers, widgetServer || selectedServerId || "");
+  if (resolved.status !== "ok") {
+    const messages = {
+      empty: "请在面板中选择一台服务器，或在 widgetServer 中填写 ID / 唯一完整名称。",
+      missing: "未找到 widgetServer 对应的服务器，请检查 ID 或名称。",
+      ambiguous: "widgetServer 名称不唯一，请改用服务器 ID。",
+    };
+    return widgetMessage("Nezha · 单服务器", messages[resolved.status]);
+  }
+  const server = resolved.server;
+  const state = server.state || {};
+  const online = isServerOnline(server);
+  const heading = widgetHeader(server.name || String(server.id), online ? "在线" : "离线");
+  const summary = summarizeScoped([server]);
+  if (family === "small") {
+    return h("Column", { gap: 8 }, heading, h("Spacer"),
+      widgetStat(`${Number(state.cpu || 0).toFixed(0)}%`, "CPU", resourceColor(state.cpu), 28),
+      widgetRates(summary),
+      h("Spacer"), widgetCompactResources(server)
+    );
+  }
+  const cache = metricsCache.get(`${server.id}:${detailPeriod}`) || {};
+  const series = cache.series || {};
+  const chartCells = [];
+  if (family === "large") {
+    if (series.cpu && series.cpu.length) {
+      chartCells.push(h("Column", { gap: 3 },
+        WTX("CPU / 内存", { fontSize: 10, color: "secondary" }),
+        h("Chart", { type: "area", height: 64, series: [widgetChartSeries(series.cpu, "accent"), widgetChartSeries(series.memory, "warning")] })
+      ));
+    }
+    if (series.net_in_speed && series.net_in_speed.length) {
+      chartCells.push(h("Column", { gap: 3 },
+        WTX("网络", { fontSize: 10, color: "secondary" }),
+        h("Chart", { type: "area", height: 64, series: [widgetChartSeries(series.net_in_speed, "accent"), widgetChartSeries(series.net_out_speed, "success")] })
+      ));
+    }
+  }
+  return h("Column", { gap: 9 }, heading,
+    h("Grid", { key: "widget-server-stats", columns: 2, gap: 9 },
+      widgetStat(`${Number(state.cpu || 0).toFixed(0)}%`, "CPU", resourceColor(state.cpu)),
+      widgetStat(`${pct(state.mem_used, server.host?.mem_total).toFixed(0)}%`, "内存", resourceColor(pct(state.mem_used, server.host?.mem_total))),
+      widgetStat(`↓${formatWidgetRate(state.net_in_speed)}`, "下行"),
+      widgetStat(`↑${formatWidgetRate(state.net_out_speed)}`, "上行")
+    ),
+    widgetDiskRow(server),
+    h("Row", { gap: 10 },
+      widgetTransfer(summary),
+      h("Spacer"),
+      WTX(`Load ${Number(state.load_1 || 0).toFixed(2)}`, { fontSize: 10, color: "secondary" })
+    ),
+    chartCells.length
+      ? h("Grid", { key: "widget-server-charts", columns: 2, gap: 8 }, ...chartCells)
+      : family === "large"
+        ? WTX(cache.loading ? "正在加载历史指标…" : "暂无历史指标", { fontSize: 11, color: "secondary", textAlign: "center" })
+        : null
+  );
+}
+
+function trafficWidget(family) {
+  const limit = family === "small" ? 1 : family === "medium" ? 2 : 6;
+  const items = cycleTransfers.slice(0, limit);
+  if (!items.length) return widgetMessage("Nezha · 周期流量", "暂无周期流量规则。");
+  return h("Column", { gap: 10 }, widgetHeader("周期流量", `${cycleTransfers.length}`),
+    items.map(item => h("Column", { key: `widget-traffic-${item.id}`, gap: 4 },
+      h("Row", { gap: 6 },
+        WTX(item.serverName, { fontSize: 11, fontWeight: 600, maxLines: 1 }),
+        h("Spacer"),
+        WTX(`${item.pct.toFixed(0)}%`, { fontSize: 11, fontWeight: 700, color: item.pct >= 95 ? "error" : item.pct >= 80 ? "warning" : "primary" })
+      ),
+      widgetProgress(item.pct, item.pct >= 95 ? "error" : item.pct >= 80 ? "warning" : "accent"),
+      WTX(`${item.cycle} · 剩余 ${formatBytes(item.remaining, 1, true)}`, { fontSize: 10, color: "secondary", maxLines: 1 })
+    ))
+  );
+}
+
+function attentionWidget(family) {
+  const limit = family === "small" ? 1 : family === "medium" ? 2 : 6;
+  const items = buildAttention({ servers: Array.from(servers.values()), services: serviceRows, alertRules, cycleTransfers }).items;
+  if (!items.length) return widgetMessage("Nezha · 关注", "当前没有需要关注的事项。");
+  return h("Column", { gap: 10 }, widgetHeader("关注事项", `${items.length}`),
+    items.slice(0, limit).map(item => h("Column", { key: `widget-attention-${item.id}`, gap: 3 },
+      h("Row", { gap: 6, alignItems: "center" },
+        h("Badge", { text: item.kind, fontSize: 9, color: item.severity === "critical" ? "error" : "warning" }),
+        WTX(item.title, { fontSize: 11, fontWeight: 600, maxLines: 1 })
+      ),
+      WTX(item.meta || item.kind, { fontSize: 10, color: "secondary", maxLines: 1 })
+    ))
+  );
+}
+
+function widgetSummary(family) {
+  if (!baseURL) return widgetMessage("Nezha", "请先在看板设置中填写 Dashboard URL。");
+  if (!loadedAt) return widgetMessage("Nezha", error || "正在加载哪吒数据…");
+  if (widgetMode === "server") return serverWidget(family);
+  if (widgetMode === "traffic") return trafficWidget(family);
+  if (widgetMode === "attention") return attentionWidget(family);
+  return overviewWidget(family);
+}
+
+function widgetTrees() {
+  return { small: widgetSummary("small"), medium: widgetSummary("medium"), large: widgetSummary("large") };
+}
+
 function trayTree() {
   const t = T();
   const scoped = currentScoped();
@@ -1484,7 +2131,7 @@ export default {
   },
   render(env) {
     syncInputs(env);
-    return { tray: trayTree(), panel: panelTree() };
+    return { tray: trayTree(), panel: panelTree(), widget: widgetTrees() };
   },
   event(name, payload) {
     if (name === "lifecycle" && payload && payload.type === "expand" && baseURL && !inflight && Date.now() - loadedAt > 15000) {

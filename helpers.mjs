@@ -58,6 +58,7 @@ export function mergeServerList(prevMap, list) {
     if (s.public_note === undefined && prev.public_note !== undefined) {
       merged.public_note = prev.public_note;
     }
+    if (s.online === undefined) delete merged.online;
     next.set(id, merged);
   }
   return next;
@@ -74,10 +75,21 @@ export function buildGroupIndex(groupPayload) {
     const name = g.name || id;
     const servers = Array.isArray(item.servers) ? item.servers.map(String) : [];
     groups.push({ id, name, servers });
-    for (const sid of servers) byServer.set(String(sid), { id, name });
+    for (const sid of servers) {
+      const key = String(sid);
+      const memberships = byServer.get(key) || [];
+      if (!memberships.some(group => group.id === id)) memberships.push({ id, name });
+      byServer.set(key, memberships);
+    }
   }
   groups.sort((a, b) => a.name.localeCompare(b.name));
   return { groups, byServer };
+}
+
+export function resolveGroupSelection(selectedGroup, groups) {
+  if (!selectedGroup || selectedGroup === "all") return "all";
+  const list = Array.isArray(groups) ? groups : [];
+  return list.some(g => String(g.id) === String(selectedGroup)) ? String(selectedGroup) : "all";
 }
 
 export function scopedServers({
@@ -90,8 +102,8 @@ export function scopedServers({
   let list = Array.from(servers.values());
   if (groupId && groupId !== "all") {
     list = list.filter(s => {
-      const g = byServerGroup.get(String(s.id));
-      return g && String(g.id) === String(groupId);
+      const memberships = byServerGroup.get(String(s.id)) || [];
+      return memberships.some(g => String(g.id) === String(groupId));
     });
   }
   if (watchMode === "starred" && watchlist && watchlist.size > 0) {
@@ -110,10 +122,12 @@ export function summarizeScoped(list, nowMs = Date.now()) {
   let cpuN = 0;
   for (const s of list) {
     const on = isServerOnline(s, nowMs);
-    if (on) online += 1;
     const st = s.state || {};
-    netDown += Number(st.net_in_speed) || 0;
-    netUp += Number(st.net_out_speed) || 0;
+    if (on) {
+      online += 1;
+      netDown += Number(st.net_in_speed) || 0;
+      netUp += Number(st.net_out_speed) || 0;
+    }
     transferDown += Number(st.net_in_transfer) || 0;
     transferUp += Number(st.net_out_transfer) || 0;
     if (on && Number.isFinite(Number(st.cpu))) {
@@ -209,11 +223,11 @@ export function mergeServiceRows(listPayload, overviewPayload) {
     .sort((a, b) => Number(a.display_index || 0) - Number(b.display_index || 0) || String(a.name).localeCompare(String(b.name)));
 }
 
-export function buildAttention({ servers, services, alertRules, nowMs = Date.now() }) {
+export function buildAttention({ servers = [], services = [], alertRules = [], cycleTransfers = [], nowMs = Date.now() }) {
   const items = [];
   for (const s of servers) {
     if (!isServerOnline(s, nowMs)) {
-      items.push({ kind: "offline", id: `srv-${s.id}`, title: s.name || String(s.id), meta: s.last_active || "" });
+      items.push({ kind: "offline", id: `srv-${s.id}`, serverId: String(s.id), title: s.name || String(s.id), meta: s.last_active || "" });
     }
   }
   for (const svc of services) {
@@ -221,13 +235,43 @@ export function buildAttention({ servers, services, alertRules, nowMs = Date.now
       items.push({
         kind: "probe",
         id: `svc-${svc.id}`,
+        serviceId: String(svc.id),
         title: svc.name,
         meta: `${svc.typeLabel} · down`,
       });
     }
   }
+  for (const c of cycleTransfers) {
+    if (c.pct < 80) continue;
+    items.push({
+      kind: "traffic",
+      id: `traffic-${c.id}`,
+      serverId: String(c.serverId),
+      title: c.serverName,
+      meta: `${c.cycle} · ${c.pct.toFixed(1)}% · ${formatBytes(c.remaining, 1, true)} left`,
+      severity: c.pct >= 95 ? "critical" : "warning",
+    });
+  }
   const rules = Array.isArray(alertRules) ? alertRules : [];
   return { items, rules };
+}
+
+export function detectTrafficThresholds(previousLevels, cycleTransfers) {
+  const nextLevels = new Map();
+  const crossed = [];
+  for (const c of Array.isArray(cycleTransfers) ? cycleTransfers : []) {
+    const level = c.pct >= 95 ? 2 : c.pct >= 80 ? 1 : 0;
+    const previous = Number(previousLevels.get(c.id)) || 0;
+    nextLevels.set(c.id, level);
+    if (level > previous) crossed.push({ ...c, level });
+  }
+  return { nextLevels, crossed };
+}
+
+export function filterServers(list, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return list;
+  return list.filter(s => `${s.name || s.id || ""}\n${s.public_note || ""}`.toLowerCase().includes(q));
 }
 
 export function trayTitle(format, summary) {
@@ -270,6 +314,7 @@ export function buildCycleTransfers(payload) {
         nextUpdate: String(nextUpdate[serverId] || ""),
         max,
         used,
+        remaining: Math.max(0, max - used),
         pct: Math.max(0, Math.min(100, (used / max) * 100)),
       });
     }
@@ -393,4 +438,40 @@ export function detectTransitions(prevOnlineIds, nextOnlineIds) {
     if (!nextOnlineIds.has(id)) wentOffline.push(id);
   }
   return { wentOffline };
+}
+
+
+export function resourceColor(value) {
+  const n = Number(value) || 0;
+  if (n >= 90) return "danger";
+  if (n >= 80) return "warning";
+  return "accent";
+}
+
+export function formatRelativeTime(iso, nowMs = Date.now(), locale = "zh") {
+  if (!iso) return "";
+  const time = Date.parse(iso);
+  if (!Number.isFinite(time)) return "";
+  const seconds = Math.max(0, Math.floor((nowMs - time) / 1000));
+  const zh = locale === "zh";
+  if (seconds < 60) return zh ? "刚刚" : "now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return zh ? `${minutes} 分钟前` : `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return zh ? `${hours} 小时前` : `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return zh ? `${days} 天前` : `${days}d ago`;
+}
+
+
+export function resolveWidgetServer(servers, selector) {
+  const list = Array.from((servers && typeof servers.values === "function" ? servers.values() : servers) || []);
+  const query = String(selector || "").trim();
+  if (!query) return { status: "empty" };
+  const byId = list.find(server => String(server && server.id) === query);
+  if (byId) return { status: "ok", server: byId };
+  const normalized = query.toLowerCase();
+  const matches = list.filter(server => String(server && server.name || "").toLowerCase() === normalized);
+  if (matches.length === 1) return { status: "ok", server: matches[0] };
+  return { status: matches.length > 1 ? "ambiguous" : "missing" };
 }
