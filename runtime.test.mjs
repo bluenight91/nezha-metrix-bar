@@ -737,7 +737,8 @@ test("overview widgets deduplicate online status and align down/up rates in the 
   assert.ok(footer);
   assert.equal(footer.type, "Row");
   assert.ok(JSON.stringify(footer).includes("累计"));
-  assert.ok(JSON.stringify(footer).includes("关注"));
+  assert.ok(!JSON.stringify(view.widget.small).includes("项关注"));
+  assert.ok(!JSON.stringify(view.widget.medium).includes("项关注"));
 });
 
 
@@ -805,7 +806,7 @@ test("notch renders compact/minimal/expanded on demand and raises activity on se
   assert.ok(view.notch.activity);
   assert.equal(view.notch.activity.id, "nezha-off-1");
   assert.ok(view.notch.expanded);
-  assert.deepEqual(Object.keys(view.widget), ["medium"]);
+  assert.deepEqual(Object.keys(view.widget), ["small", "medium", "large"]);
   assert.equal(notifications.length, 1);
   notifications[0].onclick();
   assert.equal(panelOpens.length, 1);
