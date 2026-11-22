@@ -11,7 +11,7 @@
      id="nezha"
      title="Nezha"
      refresh="5s"
-     material="glass"
+     material="solid"
      window-style="standard">
 
   <permissions>
@@ -105,7 +105,7 @@ What's New in v2.0
 - Wide Window & Standalone App: Open in a wide window or Standalone App (width >= 860) for a sortable multi-column server table paired with a live side-by-side detail pane.
 - Multi-Instance Widgets: Install additional Nezha instances in Metrix.Bar 0.3+ to place multiple widgets with different modes or monitor multiple Nezha clusters simultaneously.]]></docs>
 
-  <script apis="app localStorage notification shell websocket clipboard"><![CDATA[
+  <script apis="app localStorage notification shell websocket clipboard match-media"><![CDATA[
 const h = (type, props, ...children) => ({
   type,
   props: props || {},
@@ -113,7 +113,48 @@ const h = (type, props, ...children) => ({
 });
 
 const TX = (text, props) => h("Text", { text: String(text), ...(props || {}) });
-const K = { up: "success", down: "danger", warn: "warning", accent: "accent", muted: "textMuted" };
+const K = { up: "[#10b981]", down: "[#ef4444]", warn: "[#f59e0b]", accent: "[#0a94f2]", muted: "textMuted" };
+const PAL = {
+  brand: "#0a94f2",
+  blue: "#3b82f6",
+  sky: "#0ea5e9",
+  emerald: "#10b981",
+  indigo: "#6366f1",
+  amber: "#f59e0b",
+  red: "#ef4444",
+  slate: "#64748b",
+};
+
+function isDarkTheme() {
+  try {
+    return !!(globalThis.matchMedia && globalThis.matchMedia("(prefers-color-scheme: dark)").matches);
+  } catch {
+    return false;
+  }
+}
+
+function cardBorder() {
+  return isDarkTheme() ? "[#ffffff14]" : "[#00000010]";
+}
+
+function Line() {
+  return h("Box", { tw: `w-full h-px bg-${cardBorder()} shrink-0` });
+}
+
+function barHex(value, normalHex = PAL.blue) {
+  const n = Number(value) || 0;
+  if (n >= 90) return PAL.red;
+  if (n >= 80) return PAL.amber;
+  return normalHex;
+}
+
+function metricValueTw(value, online = true) {
+  if (!online) return "text-textMuted";
+  const n = Number(value) || 0;
+  if (n >= 90) return "text-[#ef4444]";
+  if (n >= 80) return "text-[#f59e0b]";
+  return "text-text";
+}
 
 function normalizeBaseURL(raw) {
   let u = String(raw || "").trim();
@@ -1889,15 +1930,38 @@ function toggleSort(column) {
   $metrix.invalidate();
 }
 
-function capsuleBar(pctVal, color, heightCls = "h-[3.5px]") {
+function capsuleBar(pctVal, colorHexOrToken, heightCls = "h-[3.5px]") {
   const p = Math.max(0, Math.min(100, Number(pctVal) || 0));
-  return h("Row", { tw: `${heightCls} w-full rounded-full bg-border overflow-hidden` },
-    p > 0 ? h("Box", { key: "progress-fill", tw: `h-full w-[${p}%] rounded-full bg-${color}` }) : null
+  const fillCls = String(colorHexOrToken || "").startsWith("#") ? `bg-[${colorHexOrToken}]` : `bg-${colorHexOrToken || "[#3b82f6]"}`;
+  return h("Row", { tw: `${heightCls} w-full rounded-full bg-surfaceHover overflow-hidden` },
+    p > 0 ? h("Box", { key: "progress-fill", tw: `h-full w-[${p}%] rounded-full ${fillCls}` }) : null
   );
 }
 
-function statusDot(color, size = 7) {
-  return h("Box", { tw: `size-[${size}px] rounded-full bg-${color} shrink-0` });
+function statusDot(colorHexOrToken, size = 7) {
+  const bgCls = String(colorHexOrToken || "").startsWith("#") ? `bg-[${colorHexOrToken}]` : `bg-${colorHexOrToken || "[#10b981]"}`;
+  return h("Box", { tw: `size-[${size}px] rounded-full ${bgCls} shrink-0` });
+}
+
+function CompactToggle(items, value, onChange, keyPrefix) {
+  return h(
+    "Row",
+    { tw: "p-[2px] rounded-[7px] bg-surfaceHover items-center gap-[2px] shrink-0" },
+    items.map(it => {
+      const active = it.value === value;
+      return h(
+        "Row",
+        {
+          key: `${keyPrefix}-${it.value}`,
+          tw: `py-[3px] px-2.5 rounded-[5px] cursor-pointer items-center ${active ? "bg-background shadow-sm" : ""}`,
+          onClick: () => { if (!active) onChange(it.value); },
+        },
+        TX(it.label, {
+          tw: `text-[10.5px] leading-tight ${active ? "font-semibold text-text" : "font-medium text-textMuted"}`,
+        })
+      );
+    })
+  );
 }
 
 function setMetricsCache(key, value) {
@@ -1978,16 +2042,25 @@ function totalAlertBadgeCount() {
   return attn.length + unreadInboxCount();
 }
 
-function iconActionBtn({ key, svg, onClick, disabled, tooltip, active = false }) {
-  return h("ButtonBase", {
+function iconActionBtn({ key, svg, onClick, disabled, tooltip, active = false, busy = false }) {
+  return h("Column", {
     key,
-    onClick,
-    disabled,
+    onClick: disabled ? undefined : onClick,
     tooltip,
-    tw: `size-[26px] rounded-lg items-center justify-center border ${active ? "border-accent bg-surface" : "border-border bg-surface"} cursor-pointer`,
-    hover: { border: [1, "accent"] },
+    tw: `w-7 h-7 rounded-[7px] items-center justify-center shrink-0 ${disabled ? "opacity-40" : "cursor-pointer hover:bg-surfaceHover pressed:bg-surfacePressed"} ${active ? "bg-surfaceHover" : ""}`,
   },
-    h("Icon", { svg, tw: `size-[13px] ${active ? "text-accent" : "text-textMuted"}` })
+    h("Icon", {
+      svg,
+      tw: `size-[14px] ${active ? "text-[#0a94f2]" : "text-textMuted"}`,
+      ...(busy ? {
+        keyframes: {
+          duration: 900,
+          repeat: -1,
+          ease: "linear",
+          frames: [{ at: 0, rotate: 0 }, { at: 1, rotate: 360 }],
+        },
+      } : {}),
+    })
   );
 }
 
@@ -1998,20 +2071,18 @@ function brandHeader(isWide = false) {
   const effectiveView = resolveEffectiveServerView(isWide);
   return h(
     "Row",
-    { tw: "items-center gap-2.5 w-full" },
-    h("Row", { tw: "size-[28px] rounded-lg bg-surface border border-border items-center justify-center shrink-0" },
-      h("Icon", { svg: BRAND, tw: "size-[16px] text-accent" })
-    ),
-    h("Column", { tw: "gap-0 min-w-0 grow" },
-      h("Row", { tw: "items-center gap-2" },
-        TX(site === "Nezha" ? "Nezha" : site, { tw: "text-[14px] font-bold leading-tight truncate" }),
-        loadedAt ? h("Row", { tw: "items-center gap-1 px-1.5 py-0.5 rounded-full bg-surface border border-border shrink-0" },
-          statusDot(isLive ? "success" : "accent", 5),
-          TX(`${isLive ? "Live" : "REST"} · ${formatClockTime(loadedAt)}`, { tw: "text-[9px] font-medium text-textMuted tabular-nums" })
-        ) : null
-      ),
-      site !== "Nezha" ? TX("Nezha Monitor", { tw: "text-[10px] text-textMuted leading-tight truncate" }) : null
-    ),
+    { tw: "items-center gap-2 w-full min-w-0" },
+    h("Icon", { svg: BRAND, tw: "size-[19px] text-[#0a94f2] shrink-0" }),
+    TX(site === "Nezha" ? "Nezha" : site, { tw: "text-sm font-bold leading-tight truncate min-w-0 shrink" }),
+    loadedAt ? h("Row", {
+      tw: `items-center gap-1 py-0.5 px-2 rounded-full shrink-0 ${isLive ? "bg-[#10b9811a]" : "bg-surfaceHover"}`,
+    },
+      statusDot(isLive ? PAL.emerald : PAL.sky, 5),
+      TX(`${isLive ? "Live" : "REST"} · ${formatClockTime(loadedAt)}`, {
+        tw: `text-[10px] font-medium tabular-nums ${isLive ? "text-[#10b981]" : "text-textMuted"}`,
+      })
+    ) : null,
+    h("Spacer"),
     activeTab === "servers" && loadedAt ? iconActionBtn({
       key: "toggle-view",
       svg: effectiveView === "table" ? ICONS.grid : ICONS.table,
@@ -2028,6 +2099,7 @@ function brandHeader(isWide = false) {
       svg: ICONS.refresh,
       tooltip: t.refresh,
       disabled: !baseURL,
+      busy: inflight,
       onClick: launchRefresh,
     }),
     iconActionBtn({
@@ -2064,24 +2136,49 @@ function topTabs() {
   });
 }
 
-function statCell(value, label, color, key) {
+function statCell(value, label, color, key, sizeCls = "text-[18px]") {
+  const colorTw = !color || color === "text"
+    ? "text-text"
+    : String(color).startsWith("#") ? `text-[${color}]` : `text-${color}`;
   return h(
     "Column",
     { key, tw: "gap-0.5 grow basis-0 min-w-0" },
-    TX(value, { tw: `text-[19px] font-bold leading-none tabular-nums text-${color || "text"}` }),
-    TX(label, { tw: "text-[10px] text-textMuted leading-tight truncate" })
+    TX(value, { tw: `${sizeCls} font-bold leading-tight tabular-nums truncate ${colorTw}` }),
+    TX(label, { tw: "text-[10.5px] text-textMuted leading-tight truncate" })
   );
 }
 
-function kpiSparkTile({ key, label, value, color, sparkKey, sparkColor, progressPct }) {
+function tintedStatTile({ key, label, value, valueColor = "text", tintHex = PAL.blue, sub = "" }) {
+  const valTw = valueColor === "text"
+    ? "text-text"
+    : String(valueColor).startsWith("#") ? `text-[${valueColor}]` : `text-${valueColor}`;
+  return h("Column", {
+    key,
+    tw: `gap-1 py-2.5 px-3 rounded-xl border border-${cardBorder()} bg-background grow basis-0 min-w-0`,
+    linearGradient: { from: `${tintHex}12`, to: "background", angle: 135 },
+  },
+    TX(label, { tw: "text-[10.5px] font-medium text-textMuted leading-tight truncate" }),
+    TX(value, { tw: `text-[19px] font-bold leading-tight tabular-nums truncate ${valTw}`, contentTransition: { numeric: true } }),
+    sub ? TX(sub, { tw: "text-[10px] text-textMuted tabular-nums truncate" }) : null
+  );
+}
+
+function kpiSparkTile({ key, label, value, valueColor = "text", tintHex = PAL.blue, sparkKey, sparkColor, progressPct, progressHex }) {
   const pts = sparkKey ? buildSparkPoints(fleetHistory, sparkKey, 30) : [];
+  const valTw = valueColor === "text"
+    ? "text-text"
+    : String(valueColor).startsWith("#") ? `text-[${valueColor}]` : `text-${valueColor}`;
   return h(
     "Column",
-    { key, tw: "gap-1.5 p-2.5 rounded-xl bg-surface border border-border grow basis-0 min-w-0" },
-    TX(label, { tw: "text-[9.5px] font-medium text-textMuted leading-none truncate" }),
-    TX(value, { tw: `text-[15.5px] font-bold leading-none tabular-nums truncate text-${color || "text"}` }),
+    {
+      key,
+      tw: `justify-between gap-1.5 py-2.5 px-2.5 rounded-xl border border-${cardBorder()} bg-background grow basis-0 min-w-0`,
+      linearGradient: { from: `${tintHex}12`, to: "background", angle: 135 },
+    },
+    TX(label, { tw: "text-[10px] font-medium text-textMuted leading-none truncate" }),
+    TX(value, { tw: `text-[15.5px] font-bold leading-none tabular-nums truncate ${valTw}`, contentTransition: { numeric: true } }),
     progressPct != null
-      ? capsuleBar(progressPct, color || "success", "h-[3.5px]")
+      ? capsuleBar(progressPct, progressHex || PAL.emerald, "h-[3.5px]")
       : pts.length > 1
         ? h("Chart", {
             type: "area",
@@ -2093,9 +2190,9 @@ function kpiSparkTile({ key, label, value, color, sparkKey, sparkColor, progress
             axes: false,
             hover: false,
             strokeWidth: 1.4,
-            series: [{ name: sparkKey, color: sparkColor || "accent", points: pts }],
+            series: [{ name: sparkKey, color: sparkColor || PAL.sky, points: pts }],
           })
-        : h("Box", { tw: "h-[4px] w-full rounded-full bg-border", opacity: 0.6 })
+        : h("Box", { tw: "h-[3.5px] w-full rounded-full bg-surfaceHover" })
   );
 }
 
@@ -2108,6 +2205,7 @@ function overviewCard() {
   const probesDown = serviceRows.filter(r => r.failing).length;
   const issues = s.offline + probesDown;
   const onlineRate = s.total > 0 ? (s.online / s.total) * 100 : 0;
+  const cpuHex = barHex(s.avgCpu, PAL.blue);
   return h(
     "Column",
     { tw: "gap-2 w-full" },
@@ -2116,45 +2214,50 @@ function overviewCard() {
         key: "ov-online",
         label: searchActive ? `${t.online} · ${s.total}/${unfilteredTotal}` : t.online,
         value: `${s.online}/${s.total}`,
-        color: s.offline > 0 ? "warning" : "success",
+        valueColor: s.offline > 0 ? PAL.amber : PAL.emerald,
+        tintHex: s.offline > 0 ? PAL.amber : PAL.emerald,
         progressPct: onlineRate,
+        progressHex: s.offline > 0 ? PAL.amber : PAL.emerald,
       }),
       kpiSparkTile({
         key: "ov-down",
         label: t.downRate,
         value: `↓${formatRate(s.netDown, true)}`,
-        color: "text",
+        valueColor: "text",
+        tintHex: PAL.sky,
         sparkKey: "down",
-        sparkColor: "accent",
+        sparkColor: PAL.sky,
       }),
       kpiSparkTile({
         key: "ov-up",
         label: t.upRate,
         value: `↑${formatRate(s.netUp, true)}`,
-        color: "text",
+        valueColor: "text",
+        tintHex: PAL.emerald,
         sparkKey: "up",
-        sparkColor: "success",
+        sparkColor: PAL.emerald,
       }),
       kpiSparkTile({
         key: "ov-cpu",
         label: t.avgCpu,
         value: `${s.avgCpu.toFixed(0)}%`,
-        color: resourceColor(s.avgCpu),
+        valueColor: s.avgCpu >= 80 ? cpuHex : "text",
+        tintHex: cpuHex,
         sparkKey: "cpu",
-        sparkColor: resourceColor(s.avgCpu),
+        sparkColor: cpuHex,
       })
     ),
-    h("Row", { tw: "items-center gap-2.5 px-1 w-full" },
-      TX(t.transfer, { tw: "text-[10px] text-textMuted shrink-0" }),
-      TX(`↓${formatBytes(s.transferDown, 1, true)}`, { tw: "text-[10.5px] font-semibold tabular-nums" }),
-      TX(`↑${formatBytes(s.transferUp, 1, true)}`, { tw: "text-[10.5px] font-semibold tabular-nums" }),
+    h("Row", { tw: "items-center gap-2 px-0.5 w-full" },
+      TX(t.transfer, { tw: "text-[10.5px] text-textMuted shrink-0" }),
+      TX(`↓${formatBytes(s.transferDown, 1, true)}`, { tw: "text-[10.5px] font-semibold tabular-nums text-text" }),
+      TX(`↑${formatBytes(s.transferUp, 1, true)}`, { tw: "text-[10.5px] font-semibold tabular-nums text-text" }),
       h("Spacer"),
       issues > 0
-        ? h("Row", { tw: "items-center gap-1 shrink-0" },
-            statusDot("danger", 6),
-            TX(`${s.offline} ${t.offline}${probesDown ? ` · ${probesDown} probe` : ""}`, { tw: "text-[10px] font-medium text-danger tabular-nums" })
+        ? h("Row", { tw: "items-center gap-1 py-0.5 px-2 rounded-full bg-[#ef44441a] shrink-0" },
+            statusDot(PAL.red, 5),
+            TX(`${s.offline} ${t.offline}${probesDown ? ` · ${probesDown} probe` : ""}`, { tw: "text-[10px] font-semibold text-[#ef4444] tabular-nums" })
           )
-        : TX(`${onlineRate.toFixed(0)}% · ${t.allOnline}`, { tw: "text-[10px] text-textMuted tabular-nums shrink-0" })
+        : TX(`${onlineRate.toFixed(0)}% · ${t.allOnline}`, { tw: "text-[10.5px] text-textMuted tabular-nums shrink-0" })
     )
   );
 }
@@ -2182,18 +2285,17 @@ function serversToolbar(isTableMode = false) {
       onChange: v => { serverQuery = String(v || ""); $metrix.invalidate(); },
     }) : null,
     h("Row", { tw: "gap-2 items-center w-full" },
-      h("Segmented", {
-        key: "watch",
-        items: [{ label: t.all, value: "all" }, { label: `${t.starred}${watchlist.size ? ` ${watchlist.size}` : ""}`, value: "starred" }],
-        value: watchMode,
-        onChange: v => { watchMode = String(v || "all"); localStorage.setItem("nezha.watchMode", watchMode); $metrix.invalidate(); },
-      }),
+      CompactToggle(
+        [{ label: t.all, value: "all" }, { label: `${t.starred}${watchlist.size ? ` ${watchlist.size}` : ""}`, value: "starred" }],
+        watchMode,
+        v => { watchMode = String(v || "all"); localStorage.setItem("nezha.watchMode", watchMode); $metrix.invalidate(); },
+        "watch"
+      ),
       h("Spacer"),
-      !isTableMode ? h("Segmented", {
-        key: "sort",
-        items: [{ label: t.sortCpu, value: "cpu" }, { label: t.sortNet, value: "net" }, { label: t.sortName, value: "name" }],
-        value: ["cpu", "net", "name"].includes(sortBy) ? sortBy : "cpu",
-        onChange: v => {
+      !isTableMode ? CompactToggle(
+        [{ label: t.sortCpu, value: "cpu" }, { label: t.sortNet, value: "net" }, { label: t.sortName, value: "name" }],
+        ["cpu", "net", "name"].includes(sortBy) ? sortBy : "cpu",
+        v => {
           const next = String(v || "cpu");
           sortBy = next;
           sortDir = next === "name" ? "asc" : "desc";
@@ -2201,17 +2303,18 @@ function serversToolbar(isTableMode = false) {
           localStorage.setItem("nezha.sortDir", sortDir);
           $metrix.invalidate();
         },
-      }) : null
+        "sort"
+      ) : null
     )
   );
 }
 
-function miniBarMetric(label, pctVal, online) {
-  const color = online ? resourceColor(pctVal) : "border";
+function miniBarMetric(label, pctVal, online, normalHex) {
+  const color = online ? barHex(pctVal, normalHex) : "surfaceHover";
   return h("Column", { tw: "gap-1 grow basis-0 min-w-0" },
     h("Row", { tw: "items-center justify-between w-full" },
-      TX(label, { tw: "text-[9px] text-textMuted font-medium" }),
-      TX(`${pctVal.toFixed(0)}%`, { tw: `text-[10px] font-semibold tabular-nums text-${online ? resourceColor(pctVal) : "textMuted"}` })
+      TX(label, { tw: "text-[9.5px] text-textMuted font-medium" }),
+      TX(`${pctVal.toFixed(0)}%`, { tw: `text-[10.5px] font-semibold tabular-nums ${metricValueTw(pctVal, online)}` })
     ),
     capsuleBar(pctVal, color, "h-[3px]")
   );
@@ -2228,13 +2331,12 @@ function serverCard(s, isSelected = false) {
   const diskPct = pct(st.disk_used, host.disk_total);
   const cpuPct = Math.max(0, Math.min(100, Number(st.cpu) || 0));
   const cc = String(s.country_code || host.country_code || "").trim().toUpperCase();
-  const borderCls = isSelected ? "border-accent" : (!on ? "border-danger" : "border-border");
+  const borderCls = isSelected ? "border-[#3b82f6]" : (!on ? "border-[#ef444466]" : `border-${cardBorder()}`);
   return h(
     "Column",
     {
       key: `srv-${id}`,
-      tw: `gap-2 p-3 rounded-xl bg-surface border ${borderCls} grow basis-0 min-w-0 cursor-pointer`,
-      hover: { border: [1, "accent"] },
+      tw: `gap-2.5 p-3 rounded-xl bg-background border ${borderCls} grow basis-0 min-w-0 cursor-pointer hover:bg-surfaceHover pressed:bg-surfacePressed`,
       onClick: () => {
         selectedServerId = id;
         void loadMetrics(id);
@@ -2242,11 +2344,11 @@ function serverCard(s, isSelected = false) {
       },
     },
     h("Row", { tw: "items-center gap-1.5 w-full" },
-      statusDot(on ? "success" : "danger", 7),
-      TX(s.name || id, { tw: "text-[12px] font-semibold truncate grow min-w-0" }),
-      cc ? TX(cc, { tw: "text-[8.5px] font-semibold text-textMuted px-1 py-0.5 rounded bg-background border border-border shrink-0" }) : null,
-      h("ButtonBase", {
-        tw: "size-[18px] items-center justify-center rounded shrink-0 cursor-pointer",
+      statusDot(on ? PAL.emerald : PAL.red, 7),
+      TX(s.name || id, { tw: "text-[12.5px] font-semibold text-text truncate grow min-w-0" }),
+      cc ? TX(cc, { tw: "text-[9px] font-semibold text-textMuted px-1.5 py-0.5 rounded bg-surfaceHover shrink-0" }) : null,
+      h("Column", {
+        tw: "w-5 h-5 items-center justify-center rounded-[5px] shrink-0 cursor-pointer hover:bg-surfacePressed",
         onClick: e => {
           if (e && e.stopPropagation) e.stopPropagation();
           if (starred) watchlist.delete(id); else watchlist.add(id);
@@ -2254,20 +2356,20 @@ function serverCard(s, isSelected = false) {
           $metrix.invalidate();
         },
       },
-        h("Icon", { svg: starred ? ICONS.starFilled : ICONS.star, tw: `size-[11px] text-${starred ? "warning" : "textMuted"}` })
+        h("Icon", { svg: starred ? ICONS.starFilled : ICONS.star, tw: `size-[11px] ${starred ? "text-[#f59e0b]" : "text-textMuted"}` })
       )
     ),
-    h("Row", { tw: "gap-2 w-full" },
-      miniBarMetric("CPU", cpuPct, on),
-      miniBarMetric("MEM", memPct, on),
-      miniBarMetric("DSK", diskPct, on)
+    h("Row", { tw: "gap-2.5 w-full" },
+      miniBarMetric("CPU", cpuPct, on, PAL.blue),
+      miniBarMetric("MEM", memPct, on, PAL.sky),
+      miniBarMetric("DSK", diskPct, on, PAL.slate)
     ),
     h("Row", { tw: "items-center gap-1.5 w-full" },
-      TX(`↓${formatRate(st.net_in_speed, true)}`, { tw: "text-[9.5px] tabular-nums text-textMuted" }),
-      TX(`↑${formatRate(st.net_out_speed, true)}`, { tw: "text-[9.5px] tabular-nums text-textMuted" }),
+      TX(`↓${formatRate(st.net_in_speed, true)}`, { tw: "text-[10px] tabular-nums text-textMuted" }),
+      TX(`↑${formatRate(st.net_out_speed, true)}`, { tw: "text-[10px] tabular-nums text-textMuted" }),
       h("Spacer"),
       TX(on ? `L ${Number(st.load_1 || 0).toFixed(2)}` : `${t.offline} · ${formatRelativeTime(s.last_active, Date.now(), locale)}`, {
-        tw: `text-[9.5px] tabular-nums ${on ? "text-textMuted" : "text-danger font-medium"}`,
+        tw: `text-[10px] tabular-nums ${on ? "text-textMuted" : "text-[#ef4444] font-medium"}`,
       })
     )
   );
@@ -2275,19 +2377,19 @@ function serverCard(s, isSelected = false) {
 
 function tableHeaderCell(label, colKey, widthCls, alignEnd = true) {
   const active = sortBy === colKey;
-  return h("ButtonBase", {
+  return h("Row", {
     key: `th-${colKey}`,
-    tw: `flex-row items-center gap-0.5 ${alignEnd ? "justify-end" : "justify-start"} ${widthCls} cursor-pointer`,
+    tw: `items-center gap-0.5 ${alignEnd ? "justify-end" : "justify-start"} ${widthCls} cursor-pointer`,
     onClick: () => toggleSort(colKey),
   },
-    TX(label, { tw: `text-[10px] font-semibold ${active ? "text-accent" : "text-textMuted"} truncate` }),
-    active ? h("Icon", { svg: sortDir === "asc" ? ICONS.chevronUp : ICONS.chevronDown, tw: "size-[10px] text-accent shrink-0" }) : null
+    TX(label, { tw: `text-[10px] font-semibold ${active ? "text-[#0a94f2]" : "text-textMuted"} truncate` }),
+    active ? h("Icon", { svg: sortDir === "asc" ? ICONS.chevronUp : ICONS.chevronDown, tw: "size-[10px] text-[#0a94f2] shrink-0" }) : null
   );
 }
 
 function serverTable(list, selectedId, compact = false) {
   const t = T();
-  const header = h("Row", { tw: "items-center gap-2 px-3 py-2 w-full bg-background" },
+  const header = h("Row", { tw: "items-center gap-2 px-3 py-2 w-full bg-surfaceHover" },
     tableHeaderCell(t.colNode, "name", "grow min-w-0", false),
     tableHeaderCell(t.sortCpu, "cpu", "w-[40px] shrink-0", true),
     tableHeaderCell(t.sortMem, "mem", "w-[40px] shrink-0", true),
@@ -2307,11 +2409,10 @@ function serverTable(list, selectedId, compact = false) {
     const cpuPct = Math.max(0, Math.min(100, Number(st.cpu) || 0));
     const memPct = pct(st.mem_used, host.mem_total);
     const diskPct = pct(st.disk_used, host.disk_total);
-    if (idx > 0) rows.push(h("Box", { key: `sep-${id}`, tw: "h-[1px] w-full bg-border" }));
+    if (idx > 0) rows.push(h("Box", { key: `sep-${id}`, tw: `h-px w-full bg-${cardBorder()}` }));
     rows.push(h("Row", {
       key: `srv-${id}`,
-      tw: `items-center gap-2 px-3 h-[32px] w-full cursor-pointer ${selected ? "bg-background" : ""}`,
-      hover: { background: "border" },
+      tw: `items-center gap-2 px-3 h-[34px] w-full cursor-pointer hover:bg-surfaceHover pressed:bg-surfacePressed ${selected ? "bg-[#3b82f614]" : ""}`,
       onClick: () => {
         selectedServerId = id;
         void loadMetrics(id);
@@ -2319,8 +2420,8 @@ function serverTable(list, selectedId, compact = false) {
       },
     },
       h("Row", { tw: "items-center gap-1.5 grow min-w-0" },
-        statusDot(on ? "success" : "danger", 6),
-        h("ButtonBase", {
+        statusDot(on ? PAL.emerald : PAL.red, 6),
+        h("Column", {
           tw: "size-[16px] items-center justify-center shrink-0 cursor-pointer",
           onClick: e => {
             if (e && e.stopPropagation) e.stopPropagation();
@@ -2329,19 +2430,19 @@ function serverTable(list, selectedId, compact = false) {
             $metrix.invalidate();
           },
         },
-          h("Icon", { svg: starred ? ICONS.starFilled : ICONS.star, tw: `size-[10px] text-${starred ? "warning" : "textMuted"}` })
+          h("Icon", { svg: starred ? ICONS.starFilled : ICONS.star, tw: `size-[10px] ${starred ? "text-[#f59e0b]" : "text-textMuted"}` })
         ),
-        TX(s.name || id, { tw: `text-[11.5px] ${selected ? "font-bold text-accent" : "font-medium"} truncate` })
+        TX(s.name || id, { tw: `text-[11.5px] ${selected ? "font-bold text-[#0a94f2]" : "font-medium text-text"} truncate` })
       ),
-      TX(on ? `${cpuPct.toFixed(0)}%` : "—", { tw: `w-[40px] shrink-0 text-right text-[11px] font-semibold tabular-nums text-${on ? resourceColor(cpuPct) : "textMuted"}` }),
-      TX(on ? `${memPct.toFixed(0)}%` : "—", { tw: `w-[40px] shrink-0 text-right text-[11px] tabular-nums text-${on ? resourceColor(memPct) : "textMuted"}` }),
-      !compact ? TX(on ? `${diskPct.toFixed(0)}%` : "—", { tw: `w-[40px] shrink-0 text-right text-[11px] tabular-nums text-${on ? resourceColor(diskPct) : "textMuted"}` }) : null,
+      TX(on ? `${cpuPct.toFixed(0)}%` : "—", { tw: `w-[40px] shrink-0 text-right text-[11px] font-semibold tabular-nums ${metricValueTw(cpuPct, on)}` }),
+      TX(on ? `${memPct.toFixed(0)}%` : "—", { tw: `w-[40px] shrink-0 text-right text-[11px] tabular-nums ${metricValueTw(memPct, on)}` }),
+      !compact ? TX(on ? `${diskPct.toFixed(0)}%` : "—", { tw: `w-[40px] shrink-0 text-right text-[11px] tabular-nums ${metricValueTw(diskPct, on)}` }) : null,
       TX(on ? formatRate(st.net_in_speed, true) : "—", { tw: "w-[58px] shrink-0 text-right text-[10.5px] tabular-nums text-textMuted" }),
       TX(on ? formatRate(st.net_out_speed, true) : "—", { tw: "w-[58px] shrink-0 text-right text-[10.5px] tabular-nums text-textMuted" }),
-      !compact ? TX(on ? Number(st.load_1 || 0).toFixed(2) : t.offline, { tw: `w-[42px] shrink-0 text-right text-[10.5px] tabular-nums text-${on ? "textMuted" : "danger"}` }) : null
+      !compact ? TX(on ? Number(st.load_1 || 0).toFixed(2) : t.offline, { tw: `w-[42px] shrink-0 text-right text-[10.5px] tabular-nums ${on ? "text-textMuted" : "text-[#ef4444]"}` }) : null
     ));
   });
-  return [h("Column", { key: "server-table", tw: "rounded-xl bg-surface border border-border overflow-hidden w-full" }, header, h("Box", { tw: "h-[1px] w-full bg-border" }), ...rows)];
+  return [h("Column", { key: "server-table", tw: `rounded-xl bg-background border border-${cardBorder()} overflow-hidden w-full` }, header, Line(), ...rows)];
 }
 
 function chunk(list, size) {
@@ -2361,16 +2462,17 @@ function serverGrid(list, selectedId) {
 function panelShell(header, body, { width = 520, isWide = false } = {}) {
   const statusBody = [
     ...body,
-    error && loadedAt ? h("Row", { tw: "gap-2 p-2.5 rounded-xl bg-surface border border-danger items-center w-full" },
-      TX(error, { tw: "text-[10.5px] text-danger grow min-w-0 line-clamp-1" }),
-      h("Button", { text: T().retry, onClick: launchRefresh, tw: "text-[10px]" })
+    error && loadedAt ? h("Row", { tw: "gap-2 py-2 px-3 rounded-xl bg-surfaceHover items-center w-full" },
+      statusDot(PAL.red, 6),
+      TX(error, { tw: "text-[11px] text-[#ef4444] grow min-w-0 line-clamp-1" }),
+      h("Button", { text: T().retry, onClick: launchRefresh, tw: "text-[10.5px]" })
     ) : null,
   ];
   return h(
     "Column",
-    { preferredWidth: isWide ? Math.max(920, width) : width, fill: true, minHeight: 0, safeArea: true, tw: "gap-0" },
-    h("Column", { tw: "gap-2.5 px-4 pt-3.5 pb-2.5 w-full" }, ...header),
-    h("Box", { tw: "h-[1px] w-full bg-border shrink-0" }),
+    { preferredWidth: isWide ? Math.max(920, width) : width, fill: true, minHeight: 0, safeArea: true, tw: "gap-0 text-text" },
+    h("Column", { tw: "gap-2.5 px-4 pt-3 pb-2.5 w-full" }, ...header),
+    Line(),
     h(
       "Scroll",
       { grow: 1, minHeight: 0, fillWidth: true, tw: "px-4 py-3" },
@@ -2380,13 +2482,13 @@ function panelShell(header, body, { width = 520, isWide = false } = {}) {
 }
 
 function metricChartCard(title, legendItems, charts, type, height = 140) {
-  return h("Column", { tw: "gap-2 p-3 rounded-xl bg-surface border border-border w-full" },
+  return h("Column", { tw: `gap-2 py-3 px-3.5 rounded-xl bg-background border border-${cardBorder()} w-full` },
     h("Row", { tw: "items-center gap-2 w-full" },
-      TX(title, { tw: "text-[11px] font-semibold" }),
+      TX(title, { tw: "text-[11.5px] font-semibold text-textMuted" }),
       h("Spacer"),
       ...legendItems.map((lg, i) => h("Row", { key: `lg-${i}`, tw: "items-center gap-1" },
         statusDot(lg.color, 6),
-        TX(lg.label, { tw: "text-[9.5px] text-textMuted" })
+        TX(lg.label, { tw: "text-[10px] text-textMuted" })
       ))
     ),
     h("Chart", {
@@ -2425,11 +2527,11 @@ function serverDetailBody(s) {
   const key = `${s.id}:${detailPeriod}`;
   const cache = metricsCache.get(key) || {};
   const series = cache.series || {};
-  const cpu = chartFromPoints(series.cpu, "CPU %", "accent");
+  const cpu = chartFromPoints(series.cpu, "CPU %", PAL.blue);
   const memPts = (series.memory || []).map(p => ({ ts: p.ts, value: host.mem_total ? (Number(p.value) / host.mem_total) * 100 : Number(p.value) }));
-  const mem = chartFromPoints(memPts, "Mem %", "warning");
-  const netIn = chartFromPoints(series.net_in_speed, "↓ B/s", "accent");
-  const netOut = chartFromPoints(series.net_out_speed, "↑ B/s", "success");
+  const mem = chartFromPoints(memPts, "Mem %", PAL.indigo);
+  const netIn = chartFromPoints(series.net_in_speed, "↓ B/s", PAL.sky);
+  const netOut = chartFromPoints(series.net_out_speed, "↑ B/s", PAL.emerald);
   const resourceCharts = [cpu, mem].filter(Boolean);
   const networkCharts = [netIn, netOut].filter(Boolean);
   const memPct = pct(st.mem_used, host.mem_total);
@@ -2445,16 +2547,16 @@ function serverDetailBody(s) {
 
   const monitorCard = r => h(
     "Column",
-    { key: `mon-${r.id}`, tw: "gap-0.5 p-2.5 rounded-xl bg-surface border border-border grow basis-0 min-w-0" },
+    { key: `mon-${r.id}`, tw: `gap-0.5 p-2.5 rounded-xl bg-background border border-${cardBorder()} grow basis-0 min-w-0` },
     h("Row", { tw: "items-center gap-1 w-full" },
-      TX(r.name, { tw: "text-[10.5px] font-medium truncate" }),
+      TX(r.name, { tw: "text-[10.5px] font-medium text-textMuted truncate" }),
       h("Spacer"),
       TX(r.lossPct > 0 ? `${r.lossPct.toFixed(1)}%` : "", {
-        tw: `text-[9.5px] tabular-nums text-${r.lossPct >= 5 ? "danger" : "warning"}`,
+        tw: `text-[9.5px] tabular-nums ${r.lossPct >= 5 ? "text-[#ef4444]" : "text-[#f59e0b]"}`,
       })
     ),
     TX(r.delay != null ? `${r.delay.toFixed(1)} ms` : "—", {
-      tw: `text-[13px] font-bold tabular-nums text-${r.delay == null ? "danger" : "text"}`,
+      tw: `text-[13px] font-bold tabular-nums ${r.delay == null ? "text-[#ef4444]" : "text-text"}`,
     })
   );
   const monitorGrid = chunk(monitorRows, 2).map((row, i) => {
@@ -2463,23 +2565,26 @@ function serverDetailBody(s) {
     return h("Row", { key: `mon-row-${i}`, tw: "gap-2 w-full items-start" }, ...cells);
   });
 
+  const dayHex = c => c === "success" ? PAL.emerald : c === "warning" ? PAL.amber : PAL.red;
+
   const onlineSection = online
-    ? h("Column", { tw: "gap-2.5 p-3 rounded-xl bg-surface border border-border w-full" },
-        TX(t.onlineSec, { tw: "text-[11px] font-semibold" }),
+    ? h("Column", { tw: `gap-2.5 py-3 px-3.5 rounded-xl bg-background border border-${cardBorder()} w-full` },
+        TX(t.onlineSec, { tw: "text-[11.5px] font-semibold text-textMuted" }),
         h("Row", { tw: "items-end gap-3 w-full" },
-          statCell(`${online.ratePct.toFixed(1)}%`, t.onlineRate, online.ratePct >= 99 ? "success" : online.ratePct >= 95 ? "warning" : "danger", "on-rate"),
-          statCell(formatDuration(online.onlineSeconds), t.totalOnline, "success", "on-up"),
-          statCell(formatDuration(online.offlineSeconds), t.totalOffline, online.offlineSeconds > 300 ? "danger" : online.offlineSeconds > 60 ? "warning" : "textMuted", "on-down"),
-          statCell(online.lastActive ? formatMonthDayTime(online.lastActive) : "—", t.lastActive, "textMuted", "on-last")
+          statCell(`${online.ratePct.toFixed(1)}%`, t.onlineRate, online.ratePct >= 99 ? PAL.emerald : online.ratePct >= 95 ? PAL.amber : PAL.red, "on-rate", "text-[17px]"),
+          statCell(formatDuration(online.onlineSeconds), t.totalOnline, "text", "on-up", "text-[17px]"),
+          statCell(formatDuration(online.offlineSeconds), t.totalOffline, online.offlineSeconds > 300 ? PAL.red : online.offlineSeconds > 60 ? PAL.amber : "textMuted", "on-down", "text-[17px]"),
+          statCell(online.lastActive ? formatMonthDayTime(online.lastActive) : "—", t.lastActive, "textMuted", "on-last", "text-[12.5px]")
         ),
         online.daily.length
-          ? h("Column", { tw: "gap-1.5 w-full" },
+          ? h("Column", { tw: "gap-1.5 pt-1 w-full" },
               TX(t.dailyOnline, { tw: "text-[10px] text-textMuted" }),
-              ...buildDailyOnlineRows(online.daily, Date.now(), { start: online.windowStart, end: online.windowEnd }).slice(-7).map((d, i) => h("Row", { key: `day-${i}`, tw: "items-center gap-2 w-full" },
-                TX(d.date.slice(5), { tw: "text-[9.5px] tabular-nums text-textMuted w-[42px]" }),
-                capsuleBar(d.pct, d.color, "h-[4px]"),
-                TX(`${formatDailyDuration(d.onlineSeconds)}${d.isToday ? " ·" + t.inProgress : ""}`, {
-                  tw: `text-[9.5px] tabular-nums ${d.isToday ? "text-accent" : "text-textMuted"}`,
+              ...buildDailyOnlineRows(online.daily, Date.now(), { start: online.windowStart, end: online.windowEnd }).slice(-7).map((d, i) => h("Row", { key: `day-${i}`, tw: "items-center gap-2.5 w-full" },
+                TX(d.date.slice(5), { tw: "text-[10px] tabular-nums text-textMuted w-[38px] shrink-0", noWrap: true }),
+                h("Box", { tw: "grow min-w-0" }, capsuleBar(d.pct, dayHex(d.color), "h-[4px]")),
+                TX(`${formatDailyDuration(d.onlineSeconds)}${d.isToday ? " · " + t.inProgress : ""}`, {
+                  tw: `text-[10px] tabular-nums shrink-0 text-right ${d.isToday ? "text-[#0a94f2] font-medium" : "text-textMuted"}`,
+                  noWrap: true,
                 })
               ))
             )
@@ -2487,9 +2592,9 @@ function serverDetailBody(s) {
       )
     : null;
 
-  const detailActions = h("Row", { tw: "items-center gap-2 w-full" },
-    statusDot(on ? "success" : "danger", 8),
-    TX(s.name || id, { tw: "text-[13.5px] font-bold truncate grow min-w-0" }),
+  const detailActions = h("Row", { tw: "items-center gap-1.5 w-full min-w-0" },
+    statusDot(on ? PAL.emerald : PAL.red, 8),
+    TX(s.name || id, { tw: "text-[13.5px] font-bold text-text truncate grow min-w-0" }),
     iconActionBtn({
       key: `detail-star-${id}`,
       svg: starred ? ICONS.starFilled : ICONS.star,
@@ -2506,34 +2611,39 @@ function serverDetailBody(s) {
       tooltip: t.copy,
       onClick: () => { void copyText(formatServerSummaryText(s)); },
     }),
-    h("Segmented", {
-      items: [{ label: t.period1d, value: "1d" }, { label: t.period7d, value: "7d" }],
-      value: detailPeriod,
-      onChange: v => {
+    CompactToggle(
+      [{ label: t.period1d, value: "1d" }, { label: t.period7d, value: "7d" }],
+      detailPeriod,
+      v => {
         detailPeriod = String(v || "1d");
         localStorage.setItem("nezha.period", detailPeriod);
         void loadMetrics(s.id);
         $metrix.invalidate();
       },
-    })
+      "period"
+    )
   );
 
   const factRow = (label, value) => h("Column", { tw: "gap-0.5 grow basis-0 min-w-0" },
-    TX(label, { tw: "text-[9.5px] text-textMuted" }),
-    TX(value, { tw: "text-[10.5px] font-medium tabular-nums truncate" })
+    TX(label, { tw: "text-[10px] text-textMuted" }),
+    TX(value, { tw: "text-[11px] font-medium text-text tabular-nums truncate" })
   );
 
+  const cpuVal = Number(st.cpu || 0);
   return {
     detailActions,
     nodes: [
-      h("Column", { tw: "gap-2.5 p-3 rounded-xl bg-surface border border-border w-full" },
+      h("Column", {
+        tw: `gap-2.5 py-3 px-3.5 rounded-xl bg-background border border-${cardBorder()} w-full`,
+        linearGradient: { from: `${on ? PAL.blue : PAL.red}0d`, to: "background", angle: 135 },
+      },
         h("Row", { tw: "items-end gap-3 w-full" },
-          statCell(`${Number(st.cpu || 0).toFixed(0)}%`, "CPU", resourceColor(Number(st.cpu || 0)), "d-cpu"),
-          statCell(`${memPct.toFixed(0)}%`, "MEM", resourceColor(memPct), "d-mem"),
-          statCell(`${diskPct.toFixed(0)}%`, "DISK", resourceColor(diskPct), "d-disk"),
-          statCell(on ? t.online : t.offline, t.onlineSec, on ? "success" : "danger", "d-online")
+          statCell(`${cpuVal.toFixed(0)}%`, "CPU", cpuVal >= 80 ? barHex(cpuVal) : "text", "d-cpu"),
+          statCell(`${memPct.toFixed(0)}%`, "MEM", memPct >= 80 ? barHex(memPct) : "text", "d-mem"),
+          statCell(`${diskPct.toFixed(0)}%`, "DISK", diskPct >= 80 ? barHex(diskPct) : "text", "d-disk"),
+          statCell(on ? t.online : t.offline, t.onlineSec, on ? PAL.emerald : PAL.red, "d-online", "text-[16px]")
         ),
-        h("Box", { tw: "h-[1px] w-full bg-border" }),
+        Line(),
         h("Row", { tw: "gap-3 w-full" },
           factRow(t.osLabel, `${host.platform || "?"} ${host.platform_version || ""} · ${host.arch || ""}`),
           factRow(t.load, `${Number(st.load_1 || 0).toFixed(2)} / ${Number(st.load_5 || 0).toFixed(2)} / ${Number(st.load_15 || 0).toFixed(2)}`)
@@ -2544,17 +2654,17 @@ function serverDetailBody(s) {
         )
       ),
       cache.loading ? h("Row", { tw: "items-center gap-2 px-1" }, h("Spinner", { tw: "size-[12px]" }), TX(t.loading, { tw: "text-[11.5px] text-textMuted" })) : null,
-      cache.error ? h("Row", { tw: "items-center gap-2 p-2.5 rounded-xl bg-surface border border-danger" },
-        TX(cache.error, { tw: "text-[11.5px] text-danger grow min-w-0" }),
+      cache.error ? h("Row", { tw: "items-center gap-2 py-2 px-3 rounded-xl bg-surfaceHover" },
+        TX(cache.error, { tw: "text-[11.5px] text-[#ef4444] grow min-w-0" }),
         h("Button", { text: t.retry, onClick: () => { void loadMetrics(s.id); }, tw: "text-[10px]" })
       ) : null,
-      resourceCharts.length ? metricChartCard(t.resourceChart, [{ label: "CPU", color: "accent" }, { label: "MEM", color: "warning" }], resourceCharts, "area", 140) : null,
-      networkCharts.length ? metricChartCard(t.networkChart, [{ label: t.downRate, color: "accent" }, { label: t.upRate, color: "success" }], networkCharts, "line", 140) : null,
+      resourceCharts.length ? metricChartCard(t.resourceChart, [{ label: "CPU", color: PAL.blue }, { label: "MEM", color: PAL.indigo }], resourceCharts, "area", 140) : null,
+      networkCharts.length ? metricChartCard(t.networkChart, [{ label: t.downRate, color: PAL.sky }, { label: t.upRate, color: PAL.emerald }], networkCharts, "line", 140) : null,
       monitorRows.length
         ? h("Column", { tw: "gap-2 w-full" },
             latencyCharts.length
               ? metricChartCard(t.latency, [], latencyCharts, "line", 136)
-              : TX(t.latency, { tw: "text-[11px] font-semibold px-1" }),
+              : TX(t.latency, { tw: "text-[11px] font-semibold text-textMuted px-1" }),
             ...monitorGrid
           )
         : (!cache.loading && cache.monitorRows ? TX(t.latencyEmpty, { tw: "text-[11px] text-textMuted px-1" }) : null),
@@ -2572,16 +2682,13 @@ function serverDetail(s) {
   return panelShell(
     [
       brandHeader(false),
-      h("Row", { tw: "items-center gap-2 w-full" },
-        h("ButtonBase", {
+      h("Row", { tw: "items-center gap-1.5 w-full" },
+        iconActionBtn({
           key: "detail-back",
-          tw: "flex-row items-center gap-1 px-2 py-1 rounded-lg bg-surface border border-border cursor-pointer shrink-0",
-          hover: { border: [1, "accent"] },
+          svg: ICONS.back,
+          tooltip: t.back,
           onClick: () => { selectedServerId = null; $metrix.invalidate(); },
-        },
-          h("Icon", { svg: ICONS.back, tw: "size-[12px] text-textMuted" }),
-          TX(t.back, { tw: "text-[11px] font-medium" })
-        ),
+        }),
         h("Row", { tw: "grow min-w-0" }, detailActions)
       ),
     ],
@@ -2608,24 +2715,25 @@ function serversPanel(viewportWidth = 0) {
     const detailBlock = activeServer ? serverDetailBody(activeServer) : null;
     return h(
       "Column",
-      { preferredWidth: Math.max(920, Math.min(1180, viewportWidth)), fill: true, minHeight: 0, safeArea: true, tw: "gap-0" },
-      h("Column", { tw: "gap-2.5 px-4 pt-3.5 pb-2.5 w-full" }, brandHeader(true), topTabs(), overviewCard()),
-      h("Box", { tw: "h-[1px] w-full bg-border shrink-0" }),
+      { preferredWidth: Math.max(920, Math.min(1180, viewportWidth)), fill: true, minHeight: 0, safeArea: true, tw: "gap-0 text-text" },
+      h("Column", { tw: "gap-2.5 px-4 pt-3 pb-2.5 w-full" }, brandHeader(true), topTabs(), overviewCard()),
+      Line(),
       h("Row", { grow: 1, minHeight: 0, tw: "w-full gap-0" },
         h("Column", { grow: 1, minWidth: 0, minHeight: 0, tw: "gap-2.5 px-4 py-3" },
           serversToolbar(effectiveView === "table"),
           h("Scroll", { grow: 1, minHeight: 0, fillWidth: true },
             h("Column", { tw: "gap-2.5 w-full pb-2" },
-              wsDegraded ? TX(t.wsDegraded, { tw: "text-[11px] text-warning line-clamp-1" }) : null,
+              wsDegraded ? TX(t.wsDegraded, { tw: "text-[11px] text-[#f59e0b] line-clamp-1" }) : null,
               ...listNodes,
-              error && loadedAt ? h("Row", { tw: "gap-2 p-2.5 rounded-xl bg-surface border border-danger items-center w-full" },
-                TX(error, { tw: "text-[10.5px] text-danger grow min-w-0 line-clamp-1" }),
+              error && loadedAt ? h("Row", { tw: "gap-2 py-2 px-3 rounded-xl bg-surfaceHover items-center w-full" },
+                statusDot(PAL.red, 6),
+                TX(error, { tw: "text-[10.5px] text-[#ef4444] grow min-w-0 line-clamp-1" }),
                 h("Button", { text: t.retry, onClick: launchRefresh, tw: "text-[10px]" })
               ) : null
             )
           )
         ),
-        h("Box", { tw: "w-[1px] bg-border self-stretch shrink-0" }),
+        h("Box", { tw: `w-px bg-${cardBorder()} self-stretch shrink-0` }),
         h("Column", { width: 410, shrink: 0, minHeight: 0, tw: "gap-2.5 px-4 py-3" },
           detailBlock ? detailBlock.detailActions : null,
           h("Scroll", { grow: 1, minHeight: 0, fillWidth: true },
@@ -2645,24 +2753,25 @@ function serversPanel(viewportWidth = 0) {
     : [TX(t.emptyServers, { tw: "text-[12px] text-textMuted" })];
   return panelShell(
     [brandHeader(false), topTabs(), overviewCard(), serversToolbar(effectiveView === "table")],
-    wsDegraded ? [TX(t.wsDegraded, { tw: "text-[11px] text-warning line-clamp-1" }), ...body] : body
+    wsDegraded ? [TX(t.wsDegraded, { tw: "text-[11px] text-[#f59e0b] line-clamp-1" }), ...body] : body
   );
 }
 
 function serviceRow(r) {
+  const borderCls = r.failing ? "border-[#ef444466]" : selectedServiceId === String(r.id) ? "border-[#3b82f6]" : `border-${cardBorder()}`;
   return h(
     "Column",
     {
       key: `svc-${r.id}`,
-      tw: `gap-1.5 p-3 rounded-xl bg-surface border w-full ${r.failing ? "border-danger" : selectedServiceId === String(r.id) ? "border-accent" : "border-border"}`,
+      tw: `gap-1.5 py-2.5 px-3 rounded-xl bg-background border ${borderCls} w-full hover:bg-surfaceHover`,
     },
     h("Row", { tw: "items-center gap-2 w-full" },
-      statusDot(r.failing ? "danger" : "success", 7),
-      TX(r.name, { tw: "text-[12.5px] font-semibold truncate grow min-w-0" }),
-      h("Badge", { text: r.typeLabel, textColor: K.muted, background: "background" }),
-      TX(r.failing ? "DOWN" : `${r.upPercent.toFixed(1)}%`, {
-        tw: `text-[11px] font-semibold tabular-nums shrink-0 text-${r.failing ? K.down : K.up}`,
-      })
+      statusDot(r.failing ? PAL.red : PAL.emerald, 7),
+      TX(r.name, { tw: "text-[12.5px] font-semibold text-text truncate grow min-w-0" }),
+      TX(r.typeLabel, { tw: "text-[9.5px] font-medium text-textMuted px-1.5 py-0.5 rounded bg-surfaceHover shrink-0" }),
+      r.failing
+        ? TX("DOWN", { tw: "text-[10.5px] font-semibold text-[#ef4444] px-1.5 py-0.5 rounded bg-[#ef44441a] shrink-0" })
+        : TX(`${r.upPercent.toFixed(1)}%`, { tw: "text-[11px] font-semibold tabular-nums text-[#10b981] shrink-0" })
     ),
     h("Row", { tw: "items-center w-full" },
       TX(r.target || "", { tw: "text-[10.5px] text-textMuted truncate" }),
@@ -2685,9 +2794,9 @@ function servicesPanel(viewportWidth = 0) {
   const downCount = serviceRows.filter(r => r.failing).length;
   const summary = h(
     "Row",
-    { tw: "gap-2.5 p-3 rounded-xl bg-surface border border-border w-full" },
-    statCell(String(serviceRows.length), t.tabServices, "accent", "sv-total"),
-    statCell(String(downCount), "DOWN", downCount > 0 ? "danger" : "success", "sv-down")
+    { tw: "gap-2 w-full items-stretch" },
+    tintedStatTile({ key: "sv-total", label: t.tabServices, value: String(serviceRows.length), valueColor: "text", tintHex: PAL.blue }),
+    tintedStatTile({ key: "sv-down", label: "DOWN", value: String(downCount), valueColor: downCount > 0 ? PAL.red : PAL.emerald, tintHex: downCount > 0 ? PAL.red : PAL.emerald })
   );
   const body = rows.length
     ? (isWide ? chunk(rows, 2).map((pair, i) => {
@@ -2701,11 +2810,10 @@ function servicesPanel(viewportWidth = 0) {
       brandHeader(isWide),
       topTabs(),
       summary,
-      h("Segmented", {
-        items,
-        value: serviceFilter,
-        onChange: v => { serviceFilter = String(v || "all"); $metrix.invalidate(); },
-      }),
+      h("Row", { tw: "items-center w-full" },
+        CompactToggle(items, serviceFilter, v => { serviceFilter = String(v || "all"); $metrix.invalidate(); }, "svc-filter"),
+        h("Spacer")
+      ),
     ],
     body,
     { width: isWide ? Math.min(1080, viewportWidth) : 520, isWide }
@@ -2714,25 +2822,28 @@ function servicesPanel(viewportWidth = 0) {
 
 function cycleCard(c) {
   const t = T();
-  const color = c.pct >= 95 ? "danger" : c.pct >= 80 ? "warning" : "success";
+  const barColor = c.pct >= 95 ? PAL.red : c.pct >= 80 ? PAL.amber : PAL.emerald;
+  const borderCls = c.pct >= 95 ? "border-[#ef444466]" : c.pct >= 80 ? "border-[#f59e0b66]" : `border-${cardBorder()}`;
   return h(
     "Column",
-    { key: `cyc-${c.id}`, tw: `gap-1.5 p-3 rounded-xl bg-surface border ${c.pct >= 95 ? "border-danger" : c.pct >= 80 ? "border-warning" : "border-border"} grow basis-0 min-w-0` },
+    { key: `cyc-${c.id}`, tw: `gap-2 p-3 rounded-xl bg-background border ${borderCls} grow basis-0 min-w-0` },
     h("Row", { tw: "items-center gap-1.5 w-full" },
-      TX(c.serverName, { tw: "text-[12px] font-semibold truncate grow min-w-0" }),
-      TX(`${c.pct.toFixed(1)}%`, { tw: `text-[11px] font-bold tabular-nums shrink-0 text-${color}` })
+      TX(c.serverName, { tw: "text-[12.5px] font-semibold text-text truncate grow min-w-0" }),
+      TX(`${c.pct.toFixed(1)}%`, { tw: `text-[11px] font-bold tabular-nums shrink-0 text-[${barColor}]` })
     ),
-    TX(c.cycle, { tw: "text-[9.5px] font-semibold text-accent truncate" }),
+    h("Row", { tw: "items-center w-full" },
+      TX(c.cycle, { tw: "text-[9.5px] font-medium text-[#0a94f2] px-1.5 py-0.5 rounded bg-[#0a94f214] truncate" })
+    ),
     h("Row", { tw: "items-end gap-1.5 w-full" },
-      TX(`${formatBytes(c.used, 1, true)} / ${formatBytes(c.max, 1, true)}`, { tw: "text-[11.5px] font-semibold tabular-nums" }),
+      TX(`${formatBytes(c.used, 1, true)} / ${formatBytes(c.max, 1, true)}`, { tw: "text-[11.5px] font-semibold text-text tabular-nums" }),
       h("Spacer"),
-      TX(`${t.remaining} ${formatBytes(c.remaining, 1, true)}`, { tw: "text-[9.5px] tabular-nums text-textMuted" })
+      TX(`${t.remaining} ${formatBytes(c.remaining, 1, true)}`, { tw: "text-[10px] tabular-nums text-textMuted" })
     ),
-    capsuleBar(c.pct, color, "h-[4px]"),
+    capsuleBar(c.pct, barColor, "h-[4px]"),
     h("Row", { tw: "items-center gap-1 w-full" },
-      TX(`${formatMonthDay(c.from)} - ${formatMonthDay(c.to)}`, { tw: "text-[9px] tabular-nums text-textMuted truncate" }),
+      TX(`${formatMonthDay(c.from)} - ${formatMonthDay(c.to)}`, { tw: "text-[9.5px] tabular-nums text-textMuted truncate" }),
       h("Spacer"),
-      TX(`${t.nextUpdate} ${formatMonthDayTime(c.nextUpdate)}`, { tw: "text-[9px] tabular-nums text-textMuted truncate" })
+      TX(`${t.nextUpdate} ${formatMonthDayTime(c.nextUpdate)}`, { tw: "text-[9.5px] tabular-nums text-textMuted truncate" })
     )
   );
 }
@@ -2744,9 +2855,9 @@ function trafficPanel(viewportWidth = 0) {
   const warnCount = cycleTransfers.filter(c => c.pct >= 80).length;
   const summary = h(
     "Row",
-    { tw: "gap-2.5 p-3 rounded-xl bg-surface border border-border w-full" },
-    statCell(String(cycleTransfers.length), t.cycleCount, "accent", "cyc-total"),
-    statCell(String(warnCount), t.cycleWarn, warnCount > 0 ? "warning" : "success", "cyc-warn")
+    { tw: "gap-2 w-full items-stretch" },
+    tintedStatTile({ key: "cyc-total", label: t.cycleCount, value: String(cycleTransfers.length), valueColor: "text", tintHex: PAL.sky }),
+    tintedStatTile({ key: "cyc-warn", label: t.cycleWarn, value: String(warnCount), valueColor: warnCount > 0 ? PAL.amber : PAL.emerald, tintHex: warnCount > 0 ? PAL.amber : PAL.emerald })
   );
   const body = cycleTransfers.length
     ? chunk(cycleTransfers, cols).map((row, i) => {
@@ -2761,14 +2872,13 @@ function trafficPanel(viewportWidth = 0) {
 function attentionRow(it) {
   const t = T();
   const critical = it.kind === "offline" || it.severity === "critical";
-  const color = critical ? "danger" : "warning";
+  const hex = critical ? PAL.red : PAL.amber;
   const kindLabel = it.kind === "traffic" ? t.kindTraffic : it.kind === "probe" ? t.kindProbe : t.kindOffline;
   return h(
     "Column",
     {
       key: it.id,
-      tw: `gap-1 p-3 rounded-xl bg-surface w-full border border-${color} cursor-pointer`,
-      hover: { border: [1, "accent"] },
+      tw: `gap-1 p-3 rounded-xl bg-background w-full border border-[${hex}55] cursor-pointer hover:bg-surfaceHover`,
       onClick: () => {
         if (it.serverId) {
           activeTab = "servers";
@@ -2786,9 +2896,9 @@ function attentionRow(it) {
       },
     },
     h("Row", { tw: "items-center gap-2 w-full" },
-      statusDot(color, 7),
-      TX(it.title, { tw: "text-[12.5px] font-semibold truncate grow min-w-0" }),
-      h("Badge", { text: kindLabel, textColor: color, background: "background" })
+      statusDot(hex, 7),
+      TX(it.title, { tw: "text-[12.5px] font-semibold text-text truncate grow min-w-0" }),
+      TX(kindLabel, { tw: `text-[9.5px] font-semibold text-[${hex}] px-1.5 py-0.5 rounded bg-[${hex}1a] shrink-0` })
     ),
     TX(it.kind === "offline" ? formatRelativeTime(it.meta, Date.now(), locale) || it.meta : it.meta || it.kind, {
       tw: "text-[10.5px] text-textMuted",
@@ -2800,13 +2910,13 @@ function inboxAlertCard(alert) {
   const t = T();
   const unread = isInboxUnread(inboxStore.boxes, alert.inboxId, alert.seq);
   const expanded = expandedInboxKey === alert.key;
-  const color = alert.severity === "critical" ? "danger" : alert.severity === "info" ? "success" : "warning";
+  const hex = alert.severity === "critical" ? PAL.red : alert.severity === "info" ? PAL.emerald : PAL.amber;
   const age = alert.receivedAt ? formatRelativeTime(alert.receivedAt * 1000, Date.now(), locale) : "";
   return h(
     "Column",
     {
       key: `inbox-${alert.key}`,
-      tw: `gap-1.5 p-3 rounded-xl bg-surface border ${unread ? `border-${color}` : "border-border"} w-full`,
+      tw: `gap-1.5 p-3 rounded-xl bg-background border ${unread ? `border-[${hex}55]` : `border-${cardBorder()}`} w-full`,
     },
     h("Row", {
       tw: "items-center gap-2 w-full cursor-pointer",
@@ -2819,24 +2929,24 @@ function inboxAlertCard(alert) {
         $metrix.invalidate();
       },
     },
-      statusDot(unread ? color : "border", 7),
-      TX(alert.title, { tw: `text-[12px] ${unread ? "font-bold" : "font-medium"} truncate grow min-w-0` }),
-      alert.serverName ? h("Badge", { text: alert.serverName, textColor: "accent", background: "background" }) : null,
-      h("Badge", { text: alert.source === "email" ? "Email" : "Webhook", textColor: K.muted, background: "background" }),
+      statusDot(unread ? hex : "surfaceHover", 7),
+      TX(alert.title, { tw: `text-[12px] text-text ${unread ? "font-bold" : "font-medium"} truncate grow min-w-0` }),
+      alert.serverName ? TX(alert.serverName, { tw: "text-[9.5px] font-medium text-[#0a94f2] px-1.5 py-0.5 rounded bg-[#0a94f214] shrink-0" }) : null,
+      TX(alert.source === "email" ? "Email" : "Webhook", { tw: "text-[9.5px] font-medium text-textMuted px-1.5 py-0.5 rounded bg-surfaceHover shrink-0" }),
       age ? TX(age, { tw: "text-[9.5px] text-textMuted tabular-nums shrink-0" }) : null
     ),
     alert.body && !expanded ? TX(alert.body, { tw: "text-[10.5px] text-textMuted line-clamp-2" }) : null,
     expanded ? h("Column", { tw: "gap-2 pt-1.5 w-full" },
-      h("Box", { tw: "h-[1px] w-full bg-border" }),
+      Line(),
       inboxLoadingKey === alert.key
         ? h("Row", { tw: "items-center gap-1.5" }, h("Spinner", { tw: "size-[11px]" }), TX(t.loading, { tw: "text-[10.5px] text-textMuted" }))
-        : TX(alert.body || alert.title, { selectable: true, tw: "text-[11px] leading-relaxed" }),
+        : TX(alert.body || alert.title, { selectable: true, tw: "text-[11px] text-text leading-relaxed" }),
       h("Row", { tw: "items-center gap-2 w-full" },
         alert.sender ? TX(alert.sender, { tw: "text-[9.5px] text-textMuted truncate" }) : null,
         h("Spacer"),
         h("Button", { text: t.copy, tw: "text-[10px]", onClick: () => { void copyText(`${alert.title}\n${alert.body || ""}`.trim()); } }),
         h("Button", { text: unread ? t.markRead : t.markUnread, tw: "text-[10px]", onClick: () => toggleInboxRead(alert) }),
-        caps.inboxRemove ? h("Button", { text: t.deleteBtn, tw: "text-[10px] text-danger", onClick: () => { void deleteInboxMessage(alert); } }) : null
+        caps.inboxRemove ? h("Button", { text: t.deleteBtn, tw: "text-[10px] text-[#ef4444]", onClick: () => { void deleteInboxMessage(alert); } }) : null
       )
     ) : null
   );
@@ -2847,11 +2957,13 @@ function ruleRow(r) {
     "Row",
     {
       key: `rule-${r.id}`,
-      tw: "p-2.5 rounded-xl bg-surface border border-border items-center gap-2 w-full",
+      tw: `py-2.5 px-3 rounded-xl bg-background border border-${cardBorder()} items-center gap-2.5 w-full`,
     },
-    statusDot(r.enable ? "success" : "border", 6),
-    TX(r.name || r.id, { tw: "text-[12px] truncate grow min-w-0" }),
-    TX(r.enable ? "ON" : "OFF", { tw: `text-[10px] font-semibold shrink-0 ${r.enable ? "text-success" : "text-textMuted"}` })
+    statusDot(r.enable ? PAL.emerald : "surfaceHover", 6),
+    TX(r.name || r.id, { tw: "text-[12px] text-text truncate grow min-w-0" }),
+    TX(r.enable ? "ON" : "OFF", {
+      tw: `text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${r.enable ? "text-[#10b981] bg-[#10b9811a]" : "text-textMuted bg-surfaceHover"}`,
+    })
   );
 }
 
@@ -2869,15 +2981,15 @@ function alertsPanelFn(viewportWidth = 0) {
   const unreadCount = unreadInboxCount();
   const summary = h(
     "Row",
-    { tw: "gap-2.5 p-3 rounded-xl bg-surface border border-border w-full" },
-    statCell(String(items.length), t.liveAttention, items.length ? "warning" : "success", "al-attn"),
-    statCell(String(unreadCount), t.inboxUnread, unreadCount ? "danger" : "textMuted", "al-inbox"),
-    statCell(String(rules.filter(r => r.enable).length), t.rules, "accent", "al-rules")
+    { tw: "gap-2 w-full items-stretch" },
+    tintedStatTile({ key: "al-attn", label: t.liveAttention, value: String(items.length), valueColor: items.length ? PAL.amber : PAL.emerald, tintHex: items.length ? PAL.amber : PAL.emerald }),
+    tintedStatTile({ key: "al-inbox", label: t.inboxUnread, value: String(unreadCount), valueColor: unreadCount ? PAL.red : "text", tintHex: unreadCount ? PAL.red : PAL.sky }),
+    tintedStatTile({ key: "al-rules", label: t.rules, value: String(rules.filter(r => r.enable).length), valueColor: "text", tintHex: PAL.blue })
   );
   const attention = items.length
     ? [TX(t.liveAttention, { tw: "text-[11px] font-semibold text-textMuted px-0.5" }), ...items.map(attentionRow)]
-    : [h("Row", { tw: "items-center gap-2 p-3 rounded-xl bg-surface border border-border w-full" },
-        statusDot("success", 7),
+    : [h("Row", { tw: `items-center gap-2 py-2.5 px-3 rounded-xl bg-background border border-${cardBorder()} w-full` },
+        statusDot(PAL.emerald, 7),
         TX(t.emptyAlerts, { tw: "text-[12px] text-textMuted" })
       )];
 
@@ -2886,7 +2998,7 @@ function alertsPanelFn(viewportWidth = 0) {
     if (inboxBoxes.length > 0) {
       inboxSection = [
         h("Row", { tw: "items-center gap-1.5 pt-1 px-0.5 w-full" },
-          h("Icon", { svg: ICONS.inbox, tw: "size-[12px] text-accent" }),
+          h("Icon", { svg: ICONS.inbox, tw: "size-[12px] text-[#0a94f2]" }),
           TX(`${t.inboxTitle} (${inboxAlerts.length})`, { tw: "text-[11px] font-semibold text-textMuted" }),
           h("Spacer"),
           h("Button", { text: t.refresh, tw: "text-[10px]", onClick: () => { void refreshInbox(); } })
@@ -2897,10 +3009,10 @@ function alertsPanelFn(viewportWidth = 0) {
       ];
     } else if (caps.inboxBoxes) {
       inboxSection = [
-        h("Column", { tw: "gap-1.5 p-3 rounded-xl bg-surface border border-border w-full" },
+        h("Column", { tw: `gap-1.5 p-3 rounded-xl bg-background border border-${cardBorder()} w-full` },
           h("Row", { tw: "items-center gap-1.5" },
-            h("Icon", { svg: ICONS.inbox, tw: "size-[13px] text-accent" }),
-            TX(t.inboxSetupTitle, { tw: "text-[11.5px] font-semibold" })
+            h("Icon", { svg: ICONS.inbox, tw: "size-[13px] text-[#0a94f2]" }),
+            TX(t.inboxSetupTitle, { tw: "text-[11.5px] font-semibold text-text" })
           ),
           TX(t.inboxSetupDesc, { tw: "text-[10.5px] text-textMuted leading-relaxed" })
         ),
@@ -2923,16 +3035,16 @@ function statusCard() {
   const t = T();
   if (!baseURL) {
     return panelShell([brandHeader(false)], [
-      h("Column", { tw: "gap-2 p-4 rounded-xl bg-surface border border-border" },
-        TX(t.setupTitle, { tw: "text-[15px] font-bold" }),
+      h("Column", { tw: `gap-2 p-4 rounded-xl bg-background border border-${cardBorder()}` },
+        TX(t.setupTitle, { tw: "text-[15px] font-bold text-text" }),
         TX(t.setupDesc, { tw: "text-[12px] text-textMuted" })
       ),
     ]);
   }
   if (error && !servers.size) {
     return panelShell([brandHeader(false)], [
-      h("Column", { tw: "gap-3 p-4 rounded-xl bg-surface border border-danger" },
-        TX(forceAuthHint ? t.guestForced : error, { tw: "text-[13px] text-danger" }),
+      h("Column", { tw: "gap-3 p-4 rounded-xl bg-background border border-[#ef444455]" },
+        TX(forceAuthHint ? t.guestForced : error, { tw: "text-[13px] text-[#ef4444]" }),
         h("Button", { text: t.retry, onClick: launchRefresh })
       ),
     ]);
@@ -2945,7 +3057,7 @@ function panelTree(env) {
   if (blocked) return blocked;
   if (!loadedAt && inflight) {
     return panelShell([brandHeader(false)], [
-      h("Row", { tw: "items-center gap-2 p-4 rounded-xl bg-surface border border-border" },
+      h("Row", { tw: `items-center gap-2 p-4 rounded-xl bg-background border border-${cardBorder()}` },
         h("Spinner", { tw: "size-[13px]" }),
         TX(T().loading, { tw: "text-[12px] text-textMuted" })
       ),
@@ -3213,7 +3325,7 @@ function widgetTrees(demand) {
   return out;
 }
 
-function notchSparkRow(label, value, color, sparkKey) {
+function notchSparkRow(label, value, hexColor, sparkKey) {
   const pts = buildSparkPoints(fleetHistory, sparkKey, 36);
   return h("Row", { tw: "items-center gap-2.5 w-full" },
     TX(label, { tw: "text-[10.5px] text-textMuted w-[64px] shrink-0 truncate" }),
@@ -3228,10 +3340,10 @@ function notchSparkRow(label, value, color, sparkKey) {
           axes: false,
           hover: false,
           strokeWidth: 1.4,
-          series: [{ name: sparkKey, color, points: pts }],
+          series: [{ name: sparkKey, color: hexColor, points: pts }],
         })
-      : h("Box", { tw: "grow h-[2px] bg-border rounded-full" }),
-    TX(value, { tw: `text-[11px] font-semibold tabular-nums w-[68px] text-right shrink-0 text-${color}` })
+      : h("Box", { tw: "grow h-[2px] bg-surfaceHover rounded-full" }),
+    TX(value, { tw: `text-[11px] font-semibold tabular-nums w-[68px] text-right shrink-0 text-[${hexColor}]` })
   );
 }
 
@@ -3242,16 +3354,16 @@ function notchTree(demand) {
   const summary = summarizeScoped(scoped);
   const attn = buildAttention({ servers: scoped, services: serviceRows, alertRules, cycleTransfers, nowMs: Date.now() }).items;
   const unread = unreadInboxCount();
-  const healthColor = summary.offline > 0 || attn.some(i => i.kind === "offline" || i.severity === "critical")
-    ? "danger"
-    : (attn.length > 0 || unread > 0 ? "warning" : "accent");
+  const healthHex = summary.offline > 0 || attn.some(i => i.kind === "offline" || i.severity === "critical")
+    ? PAL.red
+    : (attn.length > 0 || unread > 0 ? PAL.amber : PAL.brand);
 
-  const compactLeading = h("Icon", { svg: BRAND, tw: `size-[15px] text-${healthColor}` });
+  const compactLeading = h("Icon", { svg: BRAND, tw: `size-[15px] text-[${healthHex}]` });
   const compactTrailing = TX(
     loadedAt ? formatCompactNotchValue(notchMetric, summary) : "…",
-    { fontSize: 11, fontWeight: 600, fontFeatures: "tnum", textColor: summary.offline > 0 ? "danger" : "text" }
+    { fontSize: 11, fontWeight: 600, fontFeatures: "tnum", textColor: summary.offline > 0 ? PAL.red : "text" }
   );
-  const minimal = h("Icon", { svg: BRAND, tw: `size-[14px] text-${healthColor}` });
+  const minimal = h("Icon", { svg: BRAND, tw: `size-[14px] text-[${healthHex}]` });
 
   const view = {
     compact: { leading: compactLeading, trailing: compactTrailing },
@@ -3269,8 +3381,8 @@ function notchTree(demand) {
   const wantsExpanded = !demand || !demand.known || demand.notch === "expanded";
   if (wantsExpanded) {
     const alertEntries = [
-      ...attn.map(i => ({ key: i.id, title: i.title, meta: i.meta, color: i.kind === "offline" || i.severity === "critical" ? "danger" : "warning", serverId: i.serverId, serviceId: i.serviceId })),
-      ...inboxAlerts.filter(a => isInboxUnread(inboxStore.boxes, a.inboxId, a.seq)).slice(0, 2).map(a => ({ key: a.key, title: a.title, meta: a.serverName || a.source, color: a.severity === "critical" ? "danger" : "warning", inboxKey: a.key })),
+      ...attn.map(i => ({ key: i.id, title: i.title, meta: i.meta, color: i.kind === "offline" || i.severity === "critical" ? PAL.red : PAL.amber, serverId: i.serverId, serviceId: i.serviceId })),
+      ...inboxAlerts.filter(a => isInboxUnread(inboxStore.boxes, a.inboxId, a.seq)).slice(0, 2).map(a => ({ key: a.key, title: a.title, meta: a.serverName || a.source, color: a.severity === "critical" ? PAL.red : PAL.amber, inboxKey: a.key })),
     ].slice(0, 2);
 
     const hotNodes = scoped
@@ -3280,21 +3392,23 @@ function notchTree(demand) {
 
     view.expanded = h("Column", { width: 420, padding: 14, gap: 10 },
       h("Row", { tw: "items-center gap-2 w-full" },
-        h("Icon", { svg: BRAND, tw: `size-[16px] text-${healthColor}` }),
+        h("Icon", { svg: BRAND, tw: `size-[16px] text-[${healthHex}]` }),
         TX((settings && settings.config && settings.config.site_name) || "Nezha", { tw: "text-[13px] font-bold truncate" }),
-        h("Badge", { text: `${summary.online}/${summary.total}`, textColor: summary.offline ? "warning" : "success", background: "surface" }),
+        TX(`${summary.online}/${summary.total}`, {
+          tw: `text-[10px] font-semibold px-1.5 py-0.5 rounded-full tabular-nums ${summary.offline ? "text-[#f59e0b] bg-[#f59e0b1a]" : "text-[#10b981] bg-[#10b9811a]"}`,
+        }),
         h("Spacer"),
         TX(`↓${formatRate(summary.netDown, true)} ↑${formatRate(summary.netUp, true)}`, { tw: "text-[10.5px] font-semibold tabular-nums text-textMuted" })
       ),
-      notchSparkRow(t.avgCpu, `${summary.avgCpu.toFixed(0)}%`, resourceColor(summary.avgCpu), "cpu"),
-      notchSparkRow(t.notchAggRate, formatRate(summary.netDown + summary.netUp, true), "accent", "totalRate"),
-      h("Box", { tw: "h-[1px] w-full bg-border" }),
+      notchSparkRow(t.avgCpu, `${summary.avgCpu.toFixed(0)}%`, barHex(summary.avgCpu, PAL.blue), "cpu"),
+      notchSparkRow(t.notchAggRate, formatRate(summary.netDown + summary.netUp, true), PAL.sky, "totalRate"),
+      Line(),
       alertEntries.length
         ? h("Column", { tw: "gap-1.5 w-full" },
-            TX(t.notchAlerts, { tw: "text-[10px] font-semibold text-warning" }),
+            TX(t.notchAlerts, { tw: "text-[10px] font-semibold text-[#f59e0b]" }),
             ...alertEntries.map(al => h("Row", {
               key: `na-${al.key}`,
-              tw: "items-center gap-2 px-2 py-1.5 rounded-lg bg-surface cursor-pointer w-full",
+              tw: "items-center gap-2 px-2 py-1.5 rounded-lg bg-surfaceHover cursor-pointer w-full",
               onClick: () => {
                 if (al.serverId) handleNotificationClick(`nezha-off-${al.serverId}`);
                 else if (al.serviceId) handleNotificationClick(`nezha-probe-${al.serviceId}`);
@@ -3311,12 +3425,12 @@ function notchTree(demand) {
             ...(hotNodes.length
               ? hotNodes.map(s => h("Row", {
                   key: `nh-${s.id}`,
-                  tw: "items-center gap-2 px-2 py-1 rounded-lg bg-surface cursor-pointer w-full",
+                  tw: "items-center gap-2 px-2 py-1 rounded-lg bg-surfaceHover cursor-pointer w-full",
                   onClick: () => handleNotificationClick(`nezha-off-${s.id}`),
                 },
-                  statusDot("success", 6),
+                  statusDot(PAL.emerald, 6),
                   TX(s.name || String(s.id), { tw: "text-[11px] font-medium truncate grow min-w-0" }),
-                  TX(`CPU ${Number(s.state?.cpu || 0).toFixed(0)}%`, { tw: `text-[10.5px] font-semibold tabular-nums text-${resourceColor(s.state?.cpu)}` }),
+                  TX(`CPU ${Number(s.state?.cpu || 0).toFixed(0)}%`, { tw: `text-[10.5px] font-semibold tabular-nums ${metricValueTw(s.state?.cpu, true)}` }),
                   TX(`↓${formatShortRate(s.state?.net_in_speed)}`, { tw: "text-[10px] tabular-nums text-textMuted w-[44px] text-right" })
                 ))
               : [TX(t.noOnlineNodes, { tw: "text-[10.5px] text-textMuted" })])

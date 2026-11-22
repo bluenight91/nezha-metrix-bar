@@ -16,7 +16,7 @@
 
 ### Changed
 
-- **原生高级感毛玻璃 UI**：升级至 `material="glass"` 与自适应内容高度（移除脆弱的 `preferredHeight` 像素估算），全面采用内联 SVG 矢量图标、4 格微缩趋势 KPI 磁贴与 3 层精炼服务器卡片。
+- **Tokens 风格精致视觉升级**：保持通透清爽的 `material="solid"` 与自适应内容高度（移除脆弱的 `preferredHeight` 像素估算），通过 `match-media` 自动适配极细发丝边框（浅色 6% 黑 / 深色 8% 白）、无边框 ghost 图标按钮与轻盈胶囊切换器；采用独立策划的哪吒蓝 / 天青 / 翡翠绿 / 靛蓝 / 琥珀 / 珊瑚红克制色板，避免跟随系统强调色造成撞色，常规数值回归干净黑白主字色，顶部 KPI 磁贴搭配 7% 微渐变角标与 4 格微缩趋势图。
 - **URL 权限容错**：`<network origin="{{ inputs.baseURL }}" from-url="true" />` 自动提取 scheme/host/port，避免粘贴末尾斜杠或子路径时校验失败。
 - 提升最低应用版本声明至 `min-app-version="0.3.0"`，并更新文档以反映 Metrix.Bar 0.3+ 的多实例与独立 App 能力。
 
