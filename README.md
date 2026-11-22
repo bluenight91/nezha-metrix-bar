@@ -24,22 +24,22 @@
 
 ## 功能
 
-- **托盘** — `21/21 · 1.2M/s` 在线数 + 总带宽（另有 3 种格式可配）；错误时保留最后数值；菜单：刷新 / 打开哪吒 / 清空关注
+- **托盘** — 默认 `21/21 · 1.2M/s` 在线数 + 总带宽，共 7 种格式可配，含 3 种 macOS 富渲染模式（双行紧凑速率、速率 + 迷你面积图、CPU + 迷你趋势图），不支持平台自动回退文本；错误时保留最后数值；菜单：刷新 / 打开哪吒 / 清空关注
+- **刘海屏 Notch（Plus）** — 左右侧翼显示健康着色图标 + 紧凑数值（聚合网速 / 平均 CPU / 在线数），悬停/点击展开集群趋势、告警快讯与 Top 热点节点；节点离线、探针异常、流量超限或收到 Inbox 告警时自动弹出限时动态岛
+- **原生毛玻璃与自适应布局** — `material="glass"` 原生毛玻璃材质与自适应内容高度；顶部 4 格微缩趋势 KPI 磁贴 + 全套内联 SVG 矢量图标
 - **服务器 Tab** — 哪吒原生分组 + 星标 Watchlist（`全部 / 已选` 切换，托盘与汇总跟随关注范围；空关注 = 全部）
-  - 顶部汇总卡：在线 x/y、↓/↑ 实时带宽、平均 CPU；第二行累计 ↓↑ 流量；异常数（离线 + 探测失败）；离线机器的旧速率不会计入实时汇总
-  - 2 列紧凑卡片：CPU / MEM / DISK 连续进度条、↓↑ 实时速率、累计 ↓↑ 流量、load1；离线旧数据降低突出程度并显示最后活跃时间
+  - 顶部 4 格趋势 KPI 磁贴：在线比、↓/↑ 实时带宽迷你图、平均 CPU 迷你图；下方轻排累计 ↓↑ 流量与异常提示；离线机器的旧速率不会计入实时汇总
+  - 双视图切换：Flyout 默认 3 层精炼卡片网格，亦可一键切至**可排序紧凑表格**（支持按节点 / CPU / 内存 / 磁盘 / 下行 / 上行 / 负载点击升降序）；在宽窗口或独立 App（宽度 ≥ 860 DIP）自动展开**左侧列表 + 右侧实时详情**双栏布局
   - 超过 6 台时支持名称 / 备注搜索；分组较多时自动切换为完整下拉选择；支持一台机器属于多个分组
-  - 点击单机 → 详情：规格、当前状态、实时与累计流量、1 天 / 7 天指标历史曲线（CPU·内存 与 网络两张图，需 Dashboard 启用 TSDB）
+  - 点击单机 → 详情：规格、当前状态、实时与累计流量、一键复制摘要、1 天 / 7 天指标历史曲线（CPU·内存 与 网络两张图，需 Dashboard 启用 TSDB）
   - 详情页「网络延迟」：前 8 条监控点延迟曲线 + 全量监控点网格（当前延迟、丢包率）
   - 详情页「在线情况」：在线率 / 累计在线 / 累计离线 / 最后活跃 + 每日在线时长条（`/api/v1/server/{id}/online-history`）
-  - 面板按实际行数精确收缩，默认完整显示最多四排卡片；超过四排保持高度并滚动，分组/搜索切换不留下多余空白；面板内显示更新通道、时间与刷新错误
-- **桌面小组件** — small / medium / large 三种尺寸，四种可配置内容：全局总览、单服务器、周期流量、关注事项；单机支持 ID、唯一完整名称或跟随面板选中项，large 复用详情历史曲线
-  - 总览以紧凑数值和状态文本显示在线、↓↑ 带宽、平均 CPU 与累计流量；单机包含资源、速率、load1 与并排历史图；流量/关注列表按尺寸显示 1 / 2 / 6 条，避免溢出
-  - 点击卡片打开或聚焦看板；同一看板实例的所有卡片共用一种 Widget 模式。修改模式或服务器时立即通知系统重绘；系统决定数据刷新时机，仅 Widget 保持活跃时自动轮询最低为 1 分钟，不承诺秒级实时
+- **桌面小组件** — small / medium / large 三种尺寸、完整中英本地化、四种可配置内容：全局总览（中/大尺寸含聚合带宽趋势图）、单服务器、周期流量、关注事项；单机支持 ID、唯一完整名称或跟随面板选中项，large 复用详情历史曲线
+  - Metrix.Bar 0.3+ 支持安装多个 Nezha 实例以同时放置不同模式的小组件或监控多套哪吒集群
 - **流量 Tab** — 周期流量提醒（来自 `/api/v1/service` 的 `cycle_transfer_stats`）：每条周期一张卡，显示已用/配额、剩余量、占比条、周期起止、下次更新；≥80% 变橙、≥95% 变红
 - **服务 Tab** — HTTP / Ping / TCP 探测列表：存活率、最新延迟、失败标红；类型过滤
-- **关注 Tab** — 离线主机 + 失败探测 + 周期流量阈值；相对时间、类型标记；点击离线/流量项进入对应服务器详情，探测项进入服务列表；PAT 带 `nezha:alertrule:read` 时附完整告警规则摘要
-- **通知** — 服务器离线 / 探测失败 / 流量跨越 80% 或 95% 时发桌面通知，仅在状态翻转或阈值上升时触发一次（可在 Inputs 分别关闭）
+- **关注 Tab + Plus Inbox 告警** — 实时关注事项（离线主机 + 失败探测 + 周期流量阈值）+ **Metrix.Bar Plus 收件箱 Webhook / 邮件告警流**（接收哪吒后端完整规则告警，支持展开详情、复制、标记已读/未读与删除）+ PAT `nezha:alertrule:read` 告警规则列表
+- **通知与省流** — 离线 / 探测失败 / 周期流量 / Inbox 告警均支持点击通知直达对应节点或告警；基于 `$metrix.outputs()` 按需裁剪渲染与详情请求，并监听 `network.change` 在唤醒/切网后即时重连刷新
 - **认证** — 游客模式（站点需允许未登录读取）或 PAT；强制登录站点会显示明确的「请填写 API Token」提示
 - **数据通道** — `liveUpdates` 开启时，游客站点使用 `/api/v1/ws/server` WebSocket + 每 30 秒 REST 对账；关闭后完全使用 REST。PAT 始终按配置间隔（2–60s）进行 REST 轮询（Worker 的 WebSocket 无法携带 `Authorization` 头，把 PAT 放进 URL 会泄漏）
 - **分级刷新** — 服务数据至少 15 秒、设置与分组 5 分钟、告警规则 60 秒更新一次；手动刷新立即拉取全量。详情请求并行、去重，缓存最多保留 8 个服务器/周期条目
@@ -70,7 +70,10 @@ https://awesome.metrix.bar/dashboards/index.json
 | `apiToken` | secret（可选） | PAT（`nzp_…`）。推荐 scope：`nezha:inventory:read`、`nezha:server:read`、`nezha:service:read`，可选 `nezha:alertrule:read`。站点开启 `force_auth` 时必填 |
 | `refreshInterval` | select | 轮询间隔：2s / 5s（默认）/ 10s / 30s / 60s |
 | `liveUpdates` | bool | 游客模式使用 WebSocket + 30 秒 REST 对账（默认开）；关闭则完全 REST；PAT 始终 REST |
-| `trayFormat` | select | 托盘显示：`21/21 · 1.1M/s` / `1.1M/s` / `21/21 · ↑Up ↓Down` / `21/21` |
+| `trayFormat` | select | 托盘显示：4 种文本格式 + 3 种 macOS 富渲染格式（`stacked_rate` / `rate_spark` / `cpu_spark`） |
+| `notchMetric` | select | 刘海屏右侧紧凑指标：`rate` 聚合网速（默认）/ `cpu` 平均 CPU / `online` 在线数 |
+| `notchActivity` | bool | 离线 / 探针异常 / 流量超限 / Inbox 告警时弹出刘海屏动态岛（默认开） |
+| `serverView` | select | 服务器布局：`auto` 自动（默认，弹窗卡片 / 宽窗表格）/ `cards` 卡片 / `table` 表格 |
 | `widgetMode` | select | 桌面小组件：`overview` 总览（默认）/ `server` 单机 / `traffic` 周期流量 / `attention` 关注 |
 | `widgetServer` | string（可选） | 单机 Widget 留空时跟随面板选中的服务器；也可输入 ID 或不区分大小写的唯一完整名称，重名时须使用 ID |
 | `offlineNotify` | bool | 服务器离线桌面通知（默认开） |
@@ -85,7 +88,7 @@ PAT 在管理前端 **设置 → API Tokens** 创建；Token 只会保存在系�
 
 ```sh
 git clone https://github.com/bluenight91/nezha-metrix-bar
-node --test helpers.test.mjs runtime.test.mjs   # 纯函数 + 真实 .bar 脚本运行时报测（64 个）
+node --test helpers.test.mjs runtime.test.mjs   # 纯函数 + 真实 .bar 脚本运行时测试（76 个）
 ```
 
 - `nezha.bar` — 看板本体（单文件，协议 v0）
@@ -99,7 +102,7 @@ node --test helpers.test.mjs runtime.test.mjs   # 纯函数 + 真实 .bar 脚本
 ## 兼容性
 
 - Nezha Monitoring **V2**（REST 路径为 `/api/v1` —— 路径版本与产品代际独立，勿改为 `/api/v2`）
-- Metrix.Bar protocol v0；桌面 Widget 需要 Metrix.Bar 0.2.0+，macOS 桌面卡片需要 macOS 14+
+- Metrix.Bar protocol v0，最低应用版本 `0.3.0+`；Notch 与 Inbox 告警需 Metrix.Bar Plus，macOS 桌面卡片需要 macOS 14+
 
 ## 更新日志
 

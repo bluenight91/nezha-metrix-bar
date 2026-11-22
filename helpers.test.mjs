@@ -29,6 +29,19 @@ import {
   filterServers,
   detectTrafficThresholds,
   resolveWidgetServer,
+  pushFleetSample,
+  buildSparkPoints,
+  formatShortRate,
+  formatCompactNotchValue,
+  buildTrayContent,
+  sortServerList,
+  resolveOutputDemand,
+  parseNotificationTarget,
+  inferAlertSeverity,
+  parseInboxAlert,
+  trackInboxArrival,
+  isInboxUnread,
+  setInboxRead,
 } from "./helpers.mjs";
 
 test("normalizeBaseURL strips path and adds https", () => {
@@ -427,4 +440,119 @@ test("resolveWidgetServer reports empty, missing, and ambiguous selectors", () =
   assert.equal(resolveWidgetServer(servers, "").status, "empty");
   assert.equal(resolveWidgetServer(servers, "missing").status, "missing");
   assert.equal(resolveWidgetServer(servers, "DUPLICATE").status, "ambiguous");
+});
+
+
+test("pushFleetSample bounds ring buffer and buildSparkPoints emits finite coordinates", () => {
+  let hist = [];
+  for (let i = 0; i < 65; i += 1) {
+    hist = pushFleetSample(hist, { netDown: i * 100, netUp: i * 50, avgCpu: i, online: 2, total: 2 }, 1000 + i, 60);
+  }
+  assert.equal(hist.length, 60);
+  assert.equal(hist[0].ts, 1005);
+  assert.equal(hist[59].totalRate, 64 * 150);
+  const pts = buildSparkPoints(hist, "cpu", 10);
+  assert.equal(pts.length, 10);
+  assert.deepEqual(pts[0], { x: 0, y: 55 });
+  assert.deepEqual(pts[9], { x: 9, y: 64 });
+});
+
+test("formatShortRate and formatCompactNotchValue fit compact notch budgets", () => {
+  assert.equal(formatShortRate(0), "0B");
+  assert.equal(formatShortRate(512 * 1024), "512K");
+  assert.equal(formatShortRate(1.5 * 1024 * 1024), "1.5M");
+  const summary = { online: 21, total: 21, netDown: 200 * 1024, netUp: 140 * 1024, avgCpu: 18.4 };
+  assert.equal(formatCompactNotchValue("rate", summary), "340K");
+  assert.equal(formatCompactNotchValue("cpu", summary), "18%");
+  assert.equal(formatCompactNotchValue("online", summary), "21/21");
+});
+
+test("buildTrayContent builds valid height-22 rich trees and returns null for text modes", () => {
+  const summary = { online: 21, total: 21, netDown: 1024 * 1024, netUp: 512 * 1024, avgCpu: 22 };
+  assert.equal(buildTrayContent({ format: "online_total", summary }), null);
+  const history = [
+    { ts: 1, cpu: 10, totalRate: 1000 },
+    { ts: 2, cpu: 22, totalRate: 2000 },
+  ];
+  const stacked = buildTrayContent({ format: "stacked_rate", summary, history, canIcon: true, brandSvg: "<svg/>" });
+  assert.equal(stacked.props.height, 22);
+  assert.ok(stacked.props.width >= 16 && stacked.props.width <= 240);
+  assert.equal(stacked.children[0].type, "Icon");
+  assert.equal(stacked.children[1].type, "Column");
+
+  const rateSpark = buildTrayContent({ format: "rate_spark", summary, history, canIcon: false });
+  assert.equal(rateSpark.props.height, 22);
+  assert.ok(rateSpark.children.some(c => c.type === "Chart"));
+
+  const cpuSpark = buildTrayContent({ format: "cpu_spark", summary, history, canIcon: true, brandSvg: "<svg/>" });
+  assert.equal(cpuSpark.props.height, 22);
+  assert.ok(cpuSpark.children.some(c => c.type === "Chart"));
+  assert.equal(trayTitle("rate_spark", summary), "21/21 · ↑512K/s ↓1.00M/s");
+  assert.equal(trayTitle("cpu_spark", summary), "21/21 · 22%");
+});
+
+test("sortServerList sorts multiple columns with direction while keeping offline servers last", () => {
+  const now = Date.parse("2026-11-22T00:00:00Z");
+  const list = [
+    { id: 1, name: "beta", last_active: new Date(now).toISOString(), state: { cpu: 10, mem_used: 800, net_in_speed: 500, load_1: 0.4 }, host: { mem_total: 1000 } },
+    { id: 2, name: "alpha", last_active: new Date(now).toISOString(), state: { cpu: 40, mem_used: 200, net_in_speed: 100, load_1: 1.5 }, host: { mem_total: 1000 } },
+    { id: 3, name: "dead", last_active: "2000-01-01T00:00:00Z", state: { cpu: 99, mem_used: 999, net_in_speed: 9999, load_1: 9.0 }, host: { mem_total: 1000 } },
+  ];
+  assert.deepEqual(sortServerList(list, "cpu", "desc", now).map(s => s.id), [2, 1, 3]);
+  assert.deepEqual(sortServerList(list, "cpu", "asc", now).map(s => s.id), [1, 2, 3]);
+  assert.deepEqual(sortServerList(list, "mem", "desc", now).map(s => s.id), [1, 2, 3]);
+  assert.deepEqual(sortServerList(list, "name", "asc", now).map(s => s.id), [2, 1, 3]);
+});
+
+test("resolveOutputDemand normalizes missing and explicit output snapshots", () => {
+  const unknown = resolveOutputDemand(null);
+  assert.equal(unknown.known, false);
+  assert.equal(unknown.panel, true);
+  assert.deepEqual(unknown.widgetFamilies, ["small", "medium", "large"]);
+
+  const quiet = resolveOutputDemand({ tray: true, panel: false, notch: "compact", widget: { known: true, families: ["medium"] } });
+  assert.equal(quiet.known, true);
+  assert.equal(quiet.panel, false);
+  assert.equal(quiet.notch, "compact");
+  assert.deepEqual(quiet.widgetFamilies, ["medium"]);
+});
+
+test("parseNotificationTarget maps notification tags to panel navigation targets", () => {
+  assert.deepEqual(parseNotificationTarget("nezha-off-17"), { tab: "servers", serverId: "17" });
+  assert.deepEqual(parseNotificationTarget("nezha-probe-9"), { tab: "services", serviceId: "9" });
+  assert.deepEqual(parseNotificationTarget("nezha-traffic-5:1-2"), { tab: "servers", serverId: "5" });
+  assert.deepEqual(parseNotificationTarget("nezha-inbox-box1:42"), { tab: "alerts", inboxKey: "box1:42" });
+});
+
+test("parseInboxAlert extracts structured Nezha webhook JSON and email alerts", () => {
+  const webhook = parseInboxAlert(
+    { inbox_id: "b1", seq: 7, source: "webhook", received_at: 1760000000 },
+    JSON.stringify({ title: "服务器离线告警", server: { name: "kfc-jp" }, content: "kfc-jp 离线超过 60s" })
+  );
+  assert.equal(webhook.title, "服务器离线告警");
+  assert.equal(webhook.serverName, "kfc-jp");
+  assert.equal(webhook.severity, "critical");
+  assert.match(webhook.body, /kfc-jp/);
+
+  const recovered = parseInboxAlert(
+    { inbox_id: "b1", seq: 8, source: "email", received_at: 1760000010, subject: "Nezha Alert" },
+    { subject: "节点已恢复 online", text: "kfc-jp 已重新上线" }
+  );
+  assert.equal(recovered.severity, "info");
+  assert.equal(inferAlertSeverity("CPU 阈值 90% 警告"), "warning");
+});
+
+test("trackInboxArrival suppresses first-load noise and tracks read/unread state", () => {
+  const boxes = {};
+  const first = trackInboxArrival(boxes, "box1", [{ seq: 10 }, { seq: 9 }]);
+  assert.equal(first.length, 0);
+  assert.equal(isInboxUnread(boxes, "box1", 10), false);
+
+  const second = trackInboxArrival(boxes, "box1", [{ seq: 12 }, { seq: 11 }, { seq: 10 }]);
+  assert.deepEqual(second.map(m => m.seq), [12, 11]);
+  assert.equal(isInboxUnread(boxes, "box1", 12), true);
+  assert.equal(setInboxRead(boxes, "box1", 12, true), true);
+  assert.equal(isInboxUnread(boxes, "box1", 12), false);
+  assert.equal(setInboxRead(boxes, "box1", 10, false), true);
+  assert.equal(isInboxUnread(boxes, "box1", 10), true);
 });

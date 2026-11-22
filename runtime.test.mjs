@@ -11,7 +11,18 @@ function response(data, status = 200) {
   };
 }
 
-function loadDashboard({ fetchImpl, secrets = {}, autoOpen = false, dateImpl = Date, platform = "darwin" }) {
+function loadDashboard({
+  fetchImpl,
+  secrets = {},
+  autoOpen = false,
+  dateImpl = Date,
+  platform = "darwin",
+  locale = "zh-CN",
+  capabilities = null,
+  outputsFn = null,
+  subscription = "plus",
+  inboxMock = null,
+}) {
   const source = fs.readFileSync(new URL("./nezha.bar", import.meta.url), "utf8");
   const match = source.match(/<script[^>]*><!\[CDATA\[([\s\S]*)\]\]><\/script>/);
   assert.ok(match, "dashboard script exists");
@@ -19,6 +30,9 @@ function loadDashboard({ fetchImpl, secrets = {}, autoOpen = false, dateImpl = D
   const sockets = [];
   const notifications = [];
   const invalidations = [];
+  const panelOpens = [];
+  const toasts = [];
+  const copied = [];
   const storage = new Map();
   class MockWebSocket {
     constructor(url) {
@@ -34,34 +48,60 @@ function loadDashboard({ fetchImpl, secrets = {}, autoOpen = false, dateImpl = D
     }
     close() { this.closed = true; this.readyState = 3; }
   }
+  const metrixHost = {
+    platform,
+    env: { locale },
+    secret(name) { return secrets[name] || ""; },
+    schedule() {},
+    invalidate() { invalidations.push(Date.now()); },
+    openURL() {},
+    toast(msg) { toasts.push(String(msg)); },
+    subscription() { return subscription; },
+    panel: {
+      async open() { panelOpens.push(Date.now()); return { open: true }; },
+    },
+  };
+  if (capabilities) {
+    metrixHost.caniuse = async name => Boolean(capabilities[name]);
+  }
+  if (outputsFn) {
+    metrixHost.outputs = outputsFn;
+  }
+  if (inboxMock) {
+    metrixHost.inbox = inboxMock;
+  }
   const context = vm.createContext({
     console,
     URL,
     Intl,
+    TextDecoder,
     Date: dateImpl,
     AbortController,
     setTimeout,
     clearTimeout,
     fetch: fetchImpl,
     WebSocket: MockWebSocket,
+    navigator: {
+      clipboard: {
+        async writeText(text) { copied.push(String(text)); },
+      },
+    },
     Notification: class {
-      constructor(title, options) { notifications.push({ title, options }); }
+      constructor(title, options) {
+        this.title = title;
+        this.options = options;
+        this.onclick = null;
+        notifications.push(this);
+      }
     },
     localStorage: {
       getItem(key) { return storage.get(key) ?? null; },
       setItem(key, value) { storage.set(key, String(value)); },
     },
-    $metrix: {
-      platform,
-      env: { locale: "zh-CN" },
-      secret(name) { return secrets[name] || ""; },
-      schedule() {},
-      invalidate() { invalidations.push(Date.now()); },
-      openURL() {},
-    },
+    $metrix: metrixHost,
   });
   vm.runInContext(code, context);
-  return { dashboard: context.dashboard, sockets, notifications, invalidations, storage, context };
+  return { dashboard: context.dashboard, sockets, notifications, invalidations, panelOpens, toasts, copied, storage, context };
 }
 
 test("changing Dashboard URL closes the old WebSocket before connecting", async () => {
@@ -420,51 +460,13 @@ test("manual refresh during a slow domain queues another server refresh", async 
 });
 
 
-async function serverHeightFor(count) {
-  const servers = Array.from({ length: count }, (_, i) => ({
-    id: i + 1,
-    name: `node-${i + 1}`,
-    online: true,
-    state: {},
-    host: {},
-  }));
-  const { dashboard } = loadDashboard({
-    secrets: { apiToken: "test-token" },
-    fetchImpl: async url => {
-      const pathname = new URL(url).pathname;
-      return response(pathname === "/api/v1/server" ? servers : basicPayload(pathname));
-    },
-  });
-  const env = { inputs: { baseURL: "https://one.example.com" } };
-  await dashboard.scheduled(env);
-  return dashboard.render(env).panel.props.preferredHeight;
-}
-
-test("server panel uses measured rows, shrinks below four rows, and caps larger fleets", async () => {
-  const expected = new Map([
-    [0, 360],
-    [1, 440],
-    [2, 440],
-    [3, 550],
-    [4, 550],
-    [7, 806],
-    [8, 806],
-    [9, 806],
-    [21, 806],
-    [100, 806],
-  ]);
-  for (const [count, height] of expected) {
-    assert.equal(await serverHeightFor(count), height, `${count} servers`);
-  }
-});
-
-test("server panel height follows the filtered group, not the whole fleet", async () => {
+test("panel uses adaptive height without fixed preferredHeight and expands in wide viewports", async () => {
   const servers = Array.from({ length: 8 }, (_, i) => ({
     id: i + 1,
     name: `node-${i + 1}`,
     online: true,
-    state: {},
-    host: {},
+    state: { cpu: (i + 1) * 5, mem_used: 512, net_in_speed: 1024, net_out_speed: 512, load_1: 0.5 },
+    host: { mem_total: 1024, disk_total: 1024 },
   }));
   const { dashboard } = loadDashboard({
     secrets: { apiToken: "test-token" },
@@ -477,33 +479,22 @@ test("server panel height follows the filtered group, not the whole fleet", asyn
       return response(basicPayload(pathname));
     },
   });
-  const env = { inputs: { baseURL: "https://one.example.com" } };
-  await dashboard.scheduled(env);
-  assert.equal(dashboard.render(env).panel.props.preferredHeight, 806);
-  findNode(dashboard.render(env).panel, node => node.props?.key === "groups").props.onChange("1");
-  assert.equal(dashboard.render(env).panel.props.preferredHeight, 476);
-});
+  const flyoutEnv = { inputs: { baseURL: "https://one.example.com" } };
+  await dashboard.scheduled(flyoutEnv);
+  const flyoutPanel = dashboard.render(flyoutEnv).panel;
+  assert.equal(flyoutPanel.props.preferredHeight, undefined);
+  assert.equal(flyoutPanel.props.preferredWidth, 520);
 
-test("server panel accounts for a visible refresh error in its height", async t => {
-  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1760000000000 });
-  let fail = false;
-  const { dashboard } = loadDashboard({
-    secrets: { apiToken: "test-token" },
-    fetchImpl: async url => {
-      const pathname = new URL(url).pathname;
-      if (fail && pathname === "/api/v1/server") {
-        return { ok: false, status: 500, async text() { return JSON.stringify({ error: "boom" }); } };
-      }
-      return response(basicPayload(pathname));
-    },
-  });
-  const env = { inputs: { baseURL: "https://one.example.com" } };
-  await dashboard.scheduled(env);
-  assert.equal(dashboard.render(env).panel.props.preferredHeight, 440);
-  fail = true;
-  t.mock.timers.tick(5000);
-  await dashboard.scheduled(env);
-  assert.equal(dashboard.render(env).panel.props.preferredHeight, 483);
+  findNode(flyoutPanel, node => node.props?.key === "groups").props.onChange("1");
+  const filteredPanel = dashboard.render(flyoutEnv).panel;
+  assert.ok(JSON.stringify(filteredPanel).includes("node-1"));
+  assert.ok(!JSON.stringify(filteredPanel).includes("node-8"));
+
+  const wideEnv = { inputs: { baseURL: "https://one.example.com" }, viewport: { width: 960, height: 700 } };
+  const widePanel = dashboard.render(wideEnv).panel;
+  assert.equal(widePanel.props.preferredHeight, undefined);
+  assert.ok(widePanel.props.preferredWidth >= 920);
+  assert.ok(findNode(widePanel, node => node.props?.key === "server-table"));
 });
 
 
@@ -732,4 +723,201 @@ test("medium overview combines transfer and online status into one footer row", 
   assert.equal(footer.type, "Row");
   assert.ok(JSON.stringify(footer).includes("全部在线"));
   assert.ok(JSON.stringify(footer).includes("累计"));
+});
+
+
+test("rich macOS tray.content renders stacked rates and sparklines only when supported", async () => {
+  const { dashboard } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    capabilities: { "render.tray.content": true, "render.tray.content.icon": true },
+    fetchImpl: async url => response(widgetPayload(new URL(url).pathname)),
+  });
+  const env = { inputs: { baseURL: "https://one.example.com", trayFormat: "rate_spark" } };
+  await dashboard.scheduled(env);
+  await dashboard.scheduled(env);
+  const tray = dashboard.render(env).tray;
+  assert.ok(tray.content);
+  assert.equal(tray.content.props.height, 22);
+  assert.ok(tray.title.includes("↑"));
+
+  const { dashboard: fallback } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    capabilities: { "render.tray.content": false },
+    fetchImpl: async url => response(widgetPayload(new URL(url).pathname)),
+  });
+  await fallback.scheduled(env);
+  const fallbackTray = fallback.render(env).tray;
+  assert.equal(fallbackTray.content, undefined);
+  assert.ok(fallbackTray.title.includes("↑"));
+});
+
+test("notch renders compact/minimal/expanded on demand and raises activity on server offline", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1760000000000 });
+  let online = true;
+  let outputs = { tray: true, panel: false, notch: "compact", widget: { known: true, families: [] } };
+  const { dashboard, notifications, panelOpens } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    capabilities: { "render.notch": true, "render.notch.activity": true },
+    outputsFn: () => outputs,
+    fetchImpl: async url => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/api/v1/server") {
+        return response([{
+          id: 1,
+          name: "kfc-jp",
+          last_active: online ? new Date(Date.now()).toISOString() : "2000-01-01T00:00:00Z",
+          state: { cpu: 22, net_in_speed: 2048, net_out_speed: 1024 },
+          host: { mem_total: 1024, disk_total: 1024 },
+        }]);
+      }
+      return response(basicPayload(pathname));
+    },
+  });
+  const env = { inputs: { baseURL: "https://one.example.com", notchMetric: "cpu", notchActivity: true } };
+  await dashboard.scheduled(env);
+  let view = dashboard.render(env);
+  assert.ok(view.notch);
+  assert.equal(view.notch.compact.trailing.props.text, "22%");
+  assert.equal(view.notch.expanded, undefined);
+  assert.equal(view.notch.activity, undefined);
+  assert.equal(view.widget, undefined);
+
+  online = false;
+  t.mock.timers.tick(5000);
+  await dashboard.scheduled(env);
+  outputs = { tray: true, panel: false, notch: "expanded", widget: { known: true, families: ["medium"] } };
+  view = dashboard.render(env);
+  assert.ok(view.notch.activity);
+  assert.equal(view.notch.activity.id, "nezha-off-1");
+  assert.ok(view.notch.expanded);
+  assert.deepEqual(Object.keys(view.widget), ["medium"]);
+  assert.equal(notifications.length, 1);
+  notifications[0].onclick();
+  assert.equal(panelOpens.length, 1);
+
+  online = true;
+  t.mock.timers.tick(5000);
+  await dashboard.scheduled(env);
+  view = dashboard.render(env);
+  assert.equal(view.notch.activity, undefined);
+});
+
+test("network.change online resets WS backoff and triggers refresh", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1760000000000 });
+  let serverCalls = 0;
+  const { dashboard, sockets } = loadDashboard({
+    fetchImpl: async url => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/api/v1/server") serverCalls += 1;
+      return response(basicPayload(pathname));
+    },
+  });
+  const env = { inputs: { baseURL: "https://one.example.com" } };
+  await dashboard.scheduled(env);
+  for (let i = 0; i < 3; i += 1) {
+    sockets[i].onclose();
+    t.mock.timers.tick(5000);
+  }
+  const callsBefore = serverCalls;
+  const socketsBefore = sockets.length;
+  dashboard.event("system", { type: "network.change", online: false });
+  dashboard.event("system", { type: "network.change", online: true });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.ok(sockets.length > socketsBefore);
+  assert.ok(serverCalls > callsBefore);
+});
+
+test("Plus Inbox parses webhook alerts, notifies only new arrivals, and supports read/delete", async () => {
+  let messages = [
+    { seq: 1, inbox_id: "box1", source: "webhook", received_at: 1760000000, size: 64, subject: "", sender: "nezha" },
+  ];
+  const payloads = new Map([
+    [1, JSON.stringify({ title: "历史告警", content: "old" })],
+    [2, JSON.stringify({ title: "节点 CPU 过高", server: { name: "ali-gzh" }, content: "CPU 96% > 90%" })],
+  ]);
+  const removed = [];
+  const { dashboard, notifications } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    capabilities: { "inbox.boxes": true, "inbox.message": true, "inbox.remove": true, "render.notch": true, "render.notch.activity": true },
+    inboxMock: {
+      async boxes() { return [{ id: "box1", name: "Nezha", address: "wh@metrix", paused: false, message_count: messages.length, last_received_at: 1760000010 }]; },
+      async list() { return messages.slice(); },
+      async read(id, seq) { return Buffer.from(payloads.get(seq) || "", "utf8"); },
+      async remove(id, seq) { removed.push([id, seq]); messages = messages.filter(m => m.seq !== seq); },
+    },
+    fetchImpl: async url => response(basicPayload(new URL(url).pathname)),
+  });
+  const env = { inputs: { baseURL: "https://one.example.com" } };
+  await dashboard.scheduled(env);
+  assert.equal(notifications.length, 0);
+
+  messages = [
+    { seq: 2, inbox_id: "box1", source: "webhook", received_at: 1760000050, size: 92, subject: "", sender: "nezha" },
+    ...messages,
+  ];
+  await dashboard.event("inboxchange", { inboxIds: ["box1"] });
+
+  assert.equal(notifications.length, 1);
+  assert.match(notifications[0].title, /ali-gzh/);
+  const view = dashboard.render(env);
+  assert.equal(view.notch.activity.id, "nezha-inbox-box1:2");
+
+  const tabs = findNode(view.panel, n => n.props?.key === "main-tabs");
+  tabs.props.onChange("alerts");
+  const alertsView = dashboard.render(env).panel;
+  assert.ok(JSON.stringify(alertsView).includes("节点 CPU 过高"));
+
+  const card = findNode(alertsView, n => n.props?.key === "inbox-box1:2");
+  assert.ok(card);
+  card.children[0].props.onClick();
+  const expandedAlerts = dashboard.render(env).panel;
+  const delBtn = findNode(expandedAlerts, n => n.type === "Button" && n.props?.text === "删除");
+  assert.ok(delBtn);
+  delBtn.props.onClick();
+  for (let i = 0; i < 6; i += 1) await Promise.resolve();
+  assert.deepEqual(removed, [["box1", 2]]);
+});
+
+test("English locale localizes widgets without hardcoded Chinese strings", async () => {
+  const { dashboard } = loadDashboard({
+    locale: "en-US",
+    fetchImpl: async url => response(widgetPayload(new URL(url).pathname)),
+  });
+  const env = { inputs: { baseURL: "https://one.example.com", liveUpdates: false } };
+  await dashboard.scheduled(env);
+  const mediumText = JSON.stringify(dashboard.render(env).widget.medium);
+  assert.ok(mediumText.includes("All online"));
+  assert.ok(mediumText.includes("Total"));
+  assert.ok(!/[\u4e00-\u9fff]/.test(mediumText));
+});
+
+
+test("closed panel cache refreshes once initial server snapshot arrives and skips subsequent background rebuilds", async () => {
+  let outputs = { tray: true, panel: false, notch: "compact", widget: { known: true, families: [] } };
+  let cpu = 12;
+  const { dashboard } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    outputsFn: () => outputs,
+    fetchImpl: async url => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/api/v1/server") {
+        return response([{ id: 1, name: "edge-1", last_active: new Date().toISOString(), state: { cpu }, host: { mem_total: 100, disk_total: 100 } }]);
+      }
+      return response(basicPayload(pathname));
+    },
+  });
+  const env = { inputs: { baseURL: "https://one.example.com" } };
+  // Initial render before data loads caches setup/loading state
+  const preLoad = dashboard.render(env).panel;
+  assert.ok(!JSON.stringify(preLoad).includes("edge-1"));
+
+  await dashboard.scheduled(env);
+  const afterLoad = dashboard.render(env).panel;
+  assert.ok(JSON.stringify(afterLoad).includes("edge-1"));
+  assert.ok(JSON.stringify(afterLoad).includes("12%"));
+
+  // Next render while panel stays closed reuses cached panel tree
+  const sameRef = dashboard.render(env).panel;
+  assert.equal(sameRef, afterLoad);
 });

@@ -285,7 +285,11 @@ export function trayTitle(format, summary) {
     case "online":
       return on;
     case "online_both":
+    case "stacked_rate":
+    case "rate_spark":
       return `${on} · ↑${up} ↓${down}`;
+    case "cpu_spark":
+      return `${on} · ${Math.round(Number(summary.avgCpu) || 0)}%`;
     case "online_total":
     default:
       return `${on} · ${total}`;
@@ -474,4 +478,270 @@ export function resolveWidgetServer(servers, selector) {
   const matches = list.filter(server => String(server && server.name || "").toLowerCase() === normalized);
   if (matches.length === 1) return { status: "ok", server: matches[0] };
   return { status: matches.length > 1 ? "ambiguous" : "missing" };
+}
+
+export function pushFleetSample(history, summary, ts = Date.now(), maxLen = 60) {
+  const prev = Array.isArray(history) ? history : [];
+  const down = Number.isFinite(Number(summary?.netDown)) ? Math.max(0, Number(summary.netDown)) : 0;
+  const up = Number.isFinite(Number(summary?.netUp)) ? Math.max(0, Number(summary.netUp)) : 0;
+  const cpu = Number.isFinite(Number(summary?.avgCpu)) ? Math.max(0, Math.min(100, Number(summary.avgCpu))) : 0;
+  const sample = {
+    ts: Number.isFinite(Number(ts)) ? Number(ts) : Date.now(),
+    cpu,
+    down,
+    up,
+    totalRate: down + up,
+    online: Number(summary?.online) || 0,
+    total: Number(summary?.total) || 0,
+  };
+  const next = prev.length >= maxLen ? prev.slice(prev.length - maxLen + 1) : prev.slice();
+  next.push(sample);
+  return next;
+}
+
+export function buildSparkPoints(history, key, maxPoints = 36) {
+  const list = Array.isArray(history) ? history.slice(-maxPoints) : [];
+  const out = [];
+  for (let i = 0; i < list.length; i += 1) {
+    const val = Number(list[i]?.[key]);
+    if (!Number.isFinite(val)) continue;
+    out.push({ x: i, y: val });
+  }
+  return out;
+}
+
+export function formatShortRate(bytesPerSec) {
+  const abs = Math.abs(Number(bytesPerSec) || 0);
+  const units = ["B", "K", "M", "G", "T"];
+  let v = abs;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  const digits = v >= 10 ? 0 : i === 0 ? 0 : 1;
+  return `${v.toFixed(digits)}${units[i]}`;
+}
+
+export function formatCompactNotchValue(metric, summary) {
+  if (!summary || !summary.total) return "—";
+  if (metric === "cpu") return `${Math.round(Number(summary.avgCpu) || 0)}%`;
+  if (metric === "online") return `${summary.online}/${summary.total}`;
+  return formatShortRate((Number(summary.netDown) || 0) + (Number(summary.netUp) || 0));
+}
+
+export function buildTrayContent({ format, summary, history = [], canIcon = false, brandSvg = "" }) {
+  if (!["stacked_rate", "rate_spark", "cpu_spark"].includes(format)) return null;
+  const iconNode = canIcon && brandSvg
+    ? { type: "Icon", props: { svg: brandSvg, width: 14, height: 14, fontSize: 14 }, children: [] }
+    : null;
+  if (format === "cpu_spark") {
+    const pts = buildSparkPoints(history, "cpu", 32);
+    const chart = pts.length > 1
+      ? { type: "Chart", props: { type: "area", width: 38, height: 18, strokeWidth: 1.2, series: [{ name: "cpu", points: pts }] }, children: [] }
+      : null;
+    const label = `${Math.round(Number(summary?.avgCpu) || 0)}%`;
+    const width = (iconNode ? 18 : 0) + 34 + (chart ? 42 : 0);
+    return {
+      type: "Row",
+      props: { width: Math.max(16, Math.min(240, width)), height: 22, gap: 4, alignItems: "center" },
+      children: [iconNode, { type: "Text", props: { text: label, fontSize: 12, fontWeight: 600 }, children: [] }, chart].filter(Boolean),
+    };
+  }
+  const upText = `↑${formatShortRate(summary?.netUp)}`;
+  const downText = `↓${formatShortRate(summary?.netDown)}`;
+  const stacked = {
+    type: "Column",
+    props: { width: 48, height: 22, justify: "space-between", alignItems: "end" },
+    children: [
+      { type: "Text", props: { text: upText, fontSize: 9.5, fontWeight: 500 }, children: [] },
+      { type: "Text", props: { text: downText, fontSize: 9.5, fontWeight: 500 }, children: [] },
+    ],
+  };
+  const pts = format === "rate_spark" ? buildSparkPoints(history, "totalRate", 32) : [];
+  const chart = pts.length > 1
+    ? { type: "Chart", props: { type: "area", width: 36, height: 18, strokeWidth: 1.2, series: [{ name: "net", points: pts }] }, children: [] }
+    : null;
+  const width = (iconNode ? 18 : 0) + 50 + (chart ? 40 : 0);
+  return {
+    type: "Row",
+    props: { width: Math.max(16, Math.min(240, width)), height: 22, gap: 4, alignItems: "center" },
+    children: [iconNode, stacked, chart].filter(Boolean),
+  };
+}
+
+export function sortServerList(list, sortKey = "cpu", sortDir = "desc", nowMs = Date.now()) {
+  const dir = sortDir === "asc" ? 1 : -1;
+  const arr = (Array.isArray(list) ? list : []).slice();
+  const metric = s => {
+    const st = s?.state || {};
+    const host = s?.host || {};
+    switch (sortKey) {
+      case "name": return String(s?.name || s?.id || "");
+      case "mem": return pct(st.mem_used, host.mem_total);
+      case "disk": return pct(st.disk_used, host.disk_total);
+      case "down": return Number(st.net_in_speed) || 0;
+      case "up": return Number(st.net_out_speed) || 0;
+      case "net": return (Number(st.net_in_speed) || 0) + (Number(st.net_out_speed) || 0);
+      case "load": return Number(st.load_1) || 0;
+      case "cpu":
+      default: return Number(st.cpu) || 0;
+    }
+  };
+  arr.sort((a, b) => {
+    const onlineDiff = Number(isServerOnline(b, nowMs)) - Number(isServerOnline(a, nowMs));
+    if (onlineDiff !== 0) return onlineDiff;
+    if (sortKey === "name") {
+      return dir * metric(a).localeCompare(metric(b));
+    }
+    const diff = metric(a) - metric(b);
+    if (diff !== 0) return dir * diff;
+    return String(a?.name || a?.id || "").localeCompare(String(b?.name || b?.id || ""));
+  });
+  return arr;
+}
+
+export function resolveOutputDemand(raw) {
+  if (!raw || typeof raw !== "object") {
+    return {
+      known: false,
+      tray: true,
+      panel: true,
+      notch: null,
+      widgetKnown: false,
+      widgetFamilies: ["small", "medium", "large"],
+    };
+  }
+  const w = raw.widget && typeof raw.widget === "object" ? raw.widget : {};
+  const widgetKnown = Boolean(w.known);
+  const validFamilies = ["small", "medium", "large"];
+  const families = widgetKnown && Array.isArray(w.families)
+    ? validFamilies.filter(f => w.families.includes(f))
+    : validFamilies;
+  return {
+    known: true,
+    tray: raw.tray !== false,
+    panel: Boolean(raw.panel),
+    notch: typeof raw.notch === "string" ? raw.notch : null,
+    widgetKnown,
+    widgetFamilies: families,
+  };
+}
+
+export function parseNotificationTarget(tag) {
+  const s = String(tag || "");
+  if (s.startsWith("nezha-off-")) return { tab: "servers", serverId: s.slice(10) };
+  if (s.startsWith("nezha-probe-")) return { tab: "services", serviceId: s.slice(12) };
+  if (s.startsWith("nezha-traffic-")) {
+    const rest = s.slice(14);
+    const serverId = rest.split(":")[0] || "";
+    return { tab: serverId ? "servers" : "traffic", serverId: serverId || null };
+  }
+  if (s.startsWith("nezha-inbox-")) return { tab: "alerts", inboxKey: s.slice(12) };
+  return { tab: "alerts" };
+}
+
+export function inferAlertSeverity(text) {
+  const s = String(text || "").toLowerCase();
+  if (/(恢复|已恢复|online|recovered|resolved|ok\b)/.test(s)) return "info";
+  if (/(离线|宕机|故障|失败|严重|offline|down|critical|error|fatal|unreachable|alert)/.test(s)) return "critical";
+  if (/(警告|预警|过高|超限|阈值|warn|high|exceed|limit|80%|90%|95%)/.test(s)) return "warning";
+  return "warning";
+}
+
+export function parseInboxAlert(entry, payload = null) {
+  const src = String(entry?.source || "webhook");
+  const baseTitle = String(entry?.subject || "").trim();
+  const sender = String(entry?.sender || "").trim();
+  let title = baseTitle;
+  let body = "";
+  let serverName = "";
+
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    if (typeof payload.text === "string" && payload.subject !== undefined) {
+      title = String(payload.subject || baseTitle || "(No subject)").trim();
+      body = payload.text.trim();
+    } else {
+      title = String(payload.title || payload.rule || payload.event || payload.alert || baseTitle || "Webhook Alert").trim();
+      serverName = String(payload.server?.name || payload.server_name || payload.host || payload.node || "").trim();
+      body = String(payload.content || payload.message || payload.text || payload.description || payload.detail || "").trim();
+      if (!body) {
+        const parts = Object.entries(payload)
+          .filter(([, v]) => v !== null && v !== undefined && typeof v !== "object")
+          .slice(0, 6)
+          .map(([k, v]) => `${k}: ${v}`);
+        body = parts.join(" · ");
+      }
+    }
+  } else if (typeof payload === "string" && payload.trim()) {
+    const raw = payload.trim();
+    if (src === "webhook" && raw.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          return parseInboxAlert(entry, parsed);
+        }
+      } catch {}
+    }
+    const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (!title && lines.length) title = lines[0].slice(0, 120);
+    body = lines.join("\n");
+  }
+
+  if (!title) title = src === "webhook" ? "Webhook Alert" : "(No subject)";
+  const combined = `${title}\n${body}`;
+  return {
+    key: `${entry?.inbox_id || ""}:${entry?.seq ?? 0}`,
+    inboxId: String(entry?.inbox_id || ""),
+    seq: Number(entry?.seq) || 0,
+    source: src,
+    receivedAt: Number(entry?.received_at) || 0,
+    sender,
+    serverName,
+    title: title.slice(0, 140),
+    body: body.slice(0, 1200),
+    severity: inferAlertSeverity(combined),
+  };
+}
+
+const INBOX_READ_LIMIT = 500;
+
+export function trackInboxArrival(storeBoxes, inboxId, latest) {
+  const boxes = storeBoxes && typeof storeBoxes === "object" ? storeBoxes : {};
+  const list = Array.isArray(latest) ? latest : [];
+  const top = list.reduce((max, m) => Math.max(max, Number(m?.seq) || 0), 0);
+  const existing = boxes[inboxId];
+  if (!existing) {
+    boxes[inboxId] = { base: top, top, read: [], unread: [] };
+    return [];
+  }
+  if (!Array.isArray(existing.read)) existing.read = [];
+  if (!Array.isArray(existing.unread)) existing.unread = [];
+  const arrived = list.filter(m => (Number(m?.seq) || 0) > existing.top);
+  if (top > existing.top) existing.top = top;
+  return arrived;
+}
+
+export function isInboxUnread(storeBoxes, inboxId, seq) {
+  const e = storeBoxes?.[inboxId];
+  if (!e) return false;
+  const n = Number(seq) || 0;
+  return n > e.base ? !e.read.includes(n) : e.unread.includes(n);
+}
+
+export function setInboxRead(storeBoxes, inboxId, seq, read) {
+  const e = storeBoxes?.[inboxId];
+  if (!e) return false;
+  const n = Number(seq) || 0;
+  if (isInboxUnread(storeBoxes, inboxId, n) === !read) return false;
+  const list = n > e.base ? e.read : e.unread;
+  if (read === (n > e.base)) list.push(n);
+  else {
+    const idx = list.indexOf(n);
+    if (idx >= 0) list.splice(idx, 1);
+  }
+  e.read.sort((a, b) => a - b);
+  while (e.read.length > INBOX_READ_LIMIT) e.base = Math.max(e.base, e.read.shift());
+  e.unread = e.unread.filter(s => s <= e.base).slice(-INBOX_READ_LIMIT);
+  return true;
 }
