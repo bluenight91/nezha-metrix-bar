@@ -3402,25 +3402,29 @@ function widgetTrees(demand) {
   };
 }
 
-function notchSparkRow(label, value, hexColor, sparkKey) {
+function notchKpiCard(key, label, value, hexColor, sparkKey, valueHex = "#ffffff") {
   const pts = buildSparkPoints(fleetHistory, sparkKey, 36);
-  return h("Row", { tw: "items-center gap-2.5 w-full" },
-    TX(label, { tw: "text-[10.5px] text-textMuted w-[64px] shrink-0 truncate" }),
+  return h("Column", {
+    key,
+    tw: "grow basis-0 min-w-0 rounded-[10px] border border-[#ffffff16] px-2.5 py-2 gap-1",
+    linearGradient: { direction: "vertical", colors: [`${hexColor}1a`, "#ffffff08"] },
+  },
+    TX(label, { tw: "text-[10px] font-medium text-[#ffffff80] truncate" }),
+    TX(value, { tw: `text-[14px] font-bold tabular-nums leading-tight truncate text-[${valueHex}]` }),
     pts.length > 1
       ? h("Chart", {
           type: "area",
-          height: 22,
-          tw: "grow h-[22px]",
+          height: 20,
+          tw: "w-full h-[20px]",
           curve: "monotone",
           grid: false,
           legend: false,
           axes: false,
           hover: false,
-          strokeWidth: 1.4,
+          strokeWidth: 1.5,
           series: [{ name: sparkKey, color: hexColor, points: pts }],
         })
-      : h("Box", { tw: "grow h-[2px] bg-surfaceHover rounded-full" }),
-    TX(value, { tw: `text-[11px] font-semibold tabular-nums w-[68px] text-right shrink-0 text-[${hexColor}]` })
+      : h("Box", { tw: "w-full h-[2px] mt-2 bg-[#ffffff14] rounded-full" })
   );
 }
 
@@ -3438,7 +3442,7 @@ function notchTree(demand) {
   const compactLeading = h("Icon", { svg: BRAND, tw: `size-[15px] text-[${healthHex}]` });
   const compactTrailing = TX(
     loadedAt ? formatCompactNotchValue(notchMetric, summary) : "…",
-    { fontSize: 11, fontWeight: 600, fontFeatures: "tnum", textColor: summary.offline > 0 ? PAL.red : "text" }
+    { fontSize: 11, fontWeight: 600, fontFeatures: "tnum", textColor: summary.offline > 0 ? PAL.red : "#ffffff" }
   );
   const minimal = h("Icon", { svg: BRAND, tw: `size-[14px] text-[${healthHex}]` });
 
@@ -3460,62 +3464,112 @@ function notchTree(demand) {
     const alertEntries = [
       ...attn.map(i => ({ key: i.id, title: i.title, meta: i.meta, color: i.kind === "offline" || i.severity === "critical" ? PAL.red : PAL.amber, serverId: i.serverId, serviceId: i.serviceId })),
       ...inboxAlerts.filter(a => isInboxUnread(inboxStore.boxes, a.inboxId, a.seq)).slice(0, 2).map(a => ({ key: a.key, title: a.title, meta: a.serverName || a.source, color: a.severity === "critical" ? PAL.red : PAL.amber, inboxKey: a.key })),
-    ].slice(0, 2);
+    ].slice(0, 3);
 
     const hotNodes = scoped
       .filter(s => isServerOnline(s))
       .sort((a, b) => (Number(b.state?.cpu) || 0) - (Number(a.state?.cpu) || 0))
       .slice(0, 3);
 
-    view.expanded = h("Column", { width: 420, padding: 14, gap: 10 },
-      h("Row", { tw: "items-center gap-2 w-full" },
-        h("Icon", { svg: BRAND, tw: `size-[16px] text-[${healthHex}]` }),
-        TX((settings && settings.config && settings.config.site_name) || "Nezha", { tw: "text-[13px] font-bold truncate" }),
-        TX(`${summary.online}/${summary.total}`, {
-          tw: `text-[10px] font-semibold px-1.5 py-0.5 rounded-full tabular-nums ${summary.offline ? "text-[#f59e0b] bg-[#f59e0b1a]" : "text-[#10b981] bg-[#10b9811a]"}`,
-        }),
-        h("Spacer"),
-        TX(`↓${formatRate(summary.netDown, true)} ↑${formatRate(summary.netUp, true)}`, { tw: "text-[10.5px] font-semibold tabular-nums text-textMuted" })
-      ),
-      notchSparkRow(t.avgCpu, `${summary.avgCpu.toFixed(0)}%`, barHex(summary.avgCpu, PAL.blue), "cpu"),
-      notchSparkRow(t.notchAggRate, formatRate(summary.netDown + summary.netUp, true), PAL.sky, "totalRate"),
-      Line(),
-      alertEntries.length
-        ? h("Column", { tw: "gap-1.5 w-full" },
-            TX(t.notchAlerts, { tw: "text-[10px] font-semibold text-[#f59e0b]" }),
-            ...alertEntries.map(al => h("Row", {
-              key: `na-${al.key}`,
-              tw: "items-center gap-2 px-2 py-1.5 rounded-lg bg-surfaceHover cursor-pointer w-full",
-              onClick: () => {
-                if (al.serverId) handleNotificationClick(`nezha-off-${al.serverId}`);
-                else if (al.serviceId) handleNotificationClick(`nezha-probe-${al.serviceId}`);
-                else if (al.inboxKey) handleNotificationClick(`nezha-inbox-${al.inboxKey}`);
-              },
+    const siteName = (settings && settings.config && settings.config.site_name) || "";
+    const statusText = summary.offline
+      ? `${summary.online}/${summary.total} · ${t.offlineCount(summary.offline)}`
+      : `${summary.online}/${summary.total} · ${t.allOnline}`;
+    const notchDivider = () => h("Box", { tw: "w-full h-px bg-[#ffffff12] shrink-0" });
+    const cpuValueHex = summary.avgCpu >= 90 ? PAL.red : summary.avgCpu >= 80 ? PAL.amber : "#ffffff";
+
+    const listRows = alertEntries.length
+      ? alertEntries.flatMap((al, idx) => [
+          idx > 0 ? notchDivider() : null,
+          h("Row", {
+            key: `na-${al.key}`,
+            tw: "items-center gap-2 px-2.5 py-2 cursor-pointer hover:bg-[#ffffff12] w-full",
+            onClick: () => {
+              if (al.serverId) handleNotificationClick(`nezha-off-${al.serverId}`);
+              else if (al.serviceId) handleNotificationClick(`nezha-probe-${al.serviceId}`);
+              else if (al.inboxKey) handleNotificationClick(`nezha-inbox-${al.inboxKey}`);
             },
-              statusDot(al.color, 6),
-              TX(al.title, { tw: "text-[11px] font-semibold truncate grow min-w-0" }),
-              TX(al.meta || "", { tw: "text-[9.5px] text-textMuted truncate shrink-0" })
-            ))
-          )
-        : h("Column", { tw: "gap-1.5 w-full" },
-            TX(t.topNodes, { tw: "text-[10px] font-semibold text-textMuted" }),
-            ...(hotNodes.length
-              ? hotNodes.map(s => h("Row", {
+          },
+            statusDot(al.color, 6),
+            TX(al.title, { tw: "text-[11.5px] font-semibold text-[#ffffff] truncate grow min-w-0" }),
+            TX(al.meta || "", { tw: "text-[10px] text-[#ffffff80] truncate shrink-0" })
+          ),
+        ])
+      : (hotNodes.length
+          ? hotNodes.flatMap((s, idx) => {
+              const cpuVal = Number(s.state?.cpu || 0);
+              const memVal = pct(s.state?.mem_used, s.host?.mem_total);
+              const nodeCpuHex = cpuVal >= 90 ? PAL.red : cpuVal >= 80 ? PAL.amber : "#ffffff";
+              return [
+                idx > 0 ? notchDivider() : null,
+                h("Row", {
                   key: `nh-${s.id}`,
-                  tw: "items-center gap-2 px-2 py-1 rounded-lg bg-surfaceHover cursor-pointer w-full",
+                  tw: "items-center gap-2 px-2.5 py-1.5 cursor-pointer hover:bg-[#ffffff12] w-full",
                   onClick: () => handleNotificationClick(`nezha-off-${s.id}`),
                 },
                   statusDot(PAL.emerald, 6),
-                  TX(s.name || String(s.id), { tw: "text-[11px] font-medium truncate grow min-w-0" }),
-                  TX(`CPU ${Number(s.state?.cpu || 0).toFixed(0)}%`, { tw: `text-[10.5px] font-semibold tabular-nums ${metricValueTw(s.state?.cpu, true)}` }),
-                  TX(`↓${formatShortRate(s.state?.net_in_speed)}`, { tw: "text-[10px] tabular-nums text-textMuted w-[44px] text-right" })
-                ))
-              : [TX(t.noOnlineNodes, { tw: "text-[10.5px] text-textMuted" })])
-          ),
-      h("Row", { tw: "items-center gap-2 w-full pt-0.5" },
+                  TX(s.name || String(s.id), { tw: "text-[11.5px] font-medium text-[#ffffff] truncate grow min-w-0" }),
+                  TX(`CPU ${cpuVal.toFixed(0)}%`, { tw: `text-[10.5px] font-semibold tabular-nums w-[52px] text-right shrink-0 text-[${nodeCpuHex}]` }),
+                  TX(`MEM ${memVal.toFixed(0)}%`, { tw: "text-[10px] tabular-nums text-[#ffffff73] w-[54px] text-right shrink-0" }),
+                  TX(`↓${formatShortRate(s.state?.net_in_speed)}`, { tw: "text-[10px] tabular-nums text-[#ffffff73] w-[48px] text-right shrink-0" })
+                ),
+              ];
+            })
+          : [h("Row", { tw: "px-2.5 py-2 w-full" }, TX(t.noOnlineNodes, { tw: "text-[10.5px] text-[#ffffff73]" }))]);
+
+    view.expanded = h("Column", { width: 420, tw: "gap-2.5" },
+      h("Row", { tw: "items-center gap-2 w-full" },
+        siteName && siteName.toLowerCase() !== "nezha"
+          ? TX(siteName, { tw: "text-[12.5px] font-semibold text-[#ffffff] truncate" })
+          : null,
+        h("Row", {
+          tw: `items-center gap-1.5 px-2 py-0.5 rounded-full shrink-0 ${summary.offline ? "bg-[#f59e0b22]" : "bg-[#10b98122]"}`,
+        },
+          statusDot(summary.offline ? PAL.amber : PAL.emerald, 5),
+          TX(statusText, { tw: `text-[10px] font-semibold tabular-nums ${summary.offline ? "text-[#fbbf24]" : "text-[#34d399]"}` })
+        ),
         h("Spacer"),
-        h("Button", { text: t.refresh, tw: "text-[10.5px]", onClick: launchRefresh }),
-        h("Button", { text: t.openPanel, tw: "text-[10.5px]", onClick: () => { try { $metrix?.panel?.open?.(); } catch {} } })
+        TX(`${t.transfer} ↓${formatBytes(summary.transferDown, 1, true)} ↑${formatBytes(summary.transferUp, 1, true)}`, {
+          tw: "text-[10px] tabular-nums text-[#ffffff73] shrink-0",
+        }),
+        h("Column", {
+          key: "notch-refresh",
+          ...(!baseURL ? {} : { onClick: launchRefresh }),
+          tooltip: t.refresh,
+          tw: `w-6 h-6 rounded-[6px] items-center justify-center shrink-0 ${!baseURL ? "opacity-40" : "cursor-pointer hover:bg-[#ffffff16]"}`,
+        },
+          h("Icon", {
+            svg: ICONS.refresh,
+            tw: "size-[13px] text-[#ffffff8c]",
+            ...(inflight ? {
+              keyframes: {
+                duration: 900,
+                repeat: -1,
+                ease: "linear",
+                frames: [{ at: 0, rotate: 0 }, { at: 1, rotate: 360 }],
+              },
+            } : {}),
+          })
+        )
+      ),
+      h("Row", { tw: "items-stretch gap-2 w-full" },
+        notchKpiCard("nk-down", t.downRate, `↓${formatRate(summary.netDown, true)}`, PAL.sky, "down"),
+        notchKpiCard("nk-up", t.upRate, `↑${formatRate(summary.netUp, true)}`, PAL.emerald, "up"),
+        notchKpiCard("nk-cpu", t.avgCpu, `${summary.avgCpu.toFixed(0)}%`, barHex(summary.avgCpu, PAL.blue), "cpu", cpuValueHex)
+      ),
+      h("Column", { tw: "gap-1.5 w-full" },
+        h("Row", { tw: "items-center w-full px-0.5" },
+          TX(alertEntries.length ? t.notchAlerts : t.topNodes, {
+            tw: `text-[10px] font-semibold ${alertEntries.length ? "text-[#fbbf24]" : "text-[#ffffff73]"}`,
+          }),
+          h("Spacer"),
+          TX(t.attentionCount(attn.length + unread), {
+            tw: `text-[10px] tabular-nums ${attn.length + unread > 0 ? "text-[#fbbf24]" : "text-[#ffffff59]"}`,
+          })
+        ),
+        h("Column", { tw: "w-full rounded-[10px] bg-[#ffffff0a] border border-[#ffffff14] overflow-hidden" },
+          ...listRows
+        )
       )
     );
   }
