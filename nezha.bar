@@ -52,14 +52,12 @@
     </input>
     <input name="notchMetric" type="select" label="Notch Compact Metric" default="rate"
            help="Metric shown on the right wing of the notch (Metrix.Bar Plus on macOS / Windows).">
-      <locale lang="zh-Hans" label="刘海屏紧凑指标" help="刘海屏右侧翼显示的紧凑数值或图表（需 Metrix.Bar Plus，支持 macOS / Windows）。" />
+      <locale lang="zh-Hans" label="刘海屏紧凑指标" help="刘海屏右侧翼显示的紧凑数值（需 Metrix.Bar Plus，支持 macOS / Windows）。" />
       <option value="rate" label="Aggregate Rate (340K)"><locale lang="zh-Hans" label="聚合网速（如 340K）" /></option>
       <option value="stacked_rate" label="Stacked ↑↓ Rate"><locale lang="zh-Hans" label="双行上下行速率（↑上行 / ↓下行）" /></option>
       <option value="down" label="Download Rate (↓188K)"><locale lang="zh-Hans" label="下行速率（如 ↓188K）" /></option>
       <option value="up" label="Upload Rate (↑170K)"><locale lang="zh-Hans" label="上行速率（如 ↑170K）" /></option>
-      <option value="rate_spark" label="Rate + Sparkline"><locale lang="zh-Hans" label="聚合网速 + 迷你流量图" /></option>
       <option value="cpu" label="Average CPU (18%)"><locale lang="zh-Hans" label="平均 CPU（如 18%）" /></option>
-      <option value="cpu_spark" label="CPU + Sparkline"><locale lang="zh-Hans" label="平均 CPU + 迷你趋势图" /></option>
       <option value="online" label="Online Count (21/21)"><locale lang="zh-Hans" label="在线数（如 21/21）" /></option>
     </input>
     <input name="notchActivity" type="bool" label="Notch Alert Island" default="true"
@@ -700,7 +698,7 @@ function formatShortRate(bytesPerSec) {
 
 function formatCompactNotchValue(metric, summary) {
   if (!summary || !summary.total) return "—";
-  if (metric === "cpu" || metric === "cpu_spark") return `${Math.round(Number(summary.avgCpu) || 0)}%`;
+  if (metric === "cpu") return `${Math.round(Number(summary.avgCpu) || 0)}%`;
   if (metric === "online") return `${summary.online}/${summary.total}`;
   if (metric === "down") return `↓${formatShortRate(summary.netDown)}`;
   if (metric === "up") return `↑${formatShortRate(summary.netUp)}`;
@@ -1470,7 +1468,7 @@ function syncInputs(env) {
     trayFormat = tf;
   }
   const nm = String(inputs.notchMetric || "rate");
-  notchMetric = ["rate", "stacked_rate", "down", "up", "rate_spark", "cpu", "cpu_spark", "online"].includes(nm) ? nm : "rate";
+  notchMetric = ["rate", "stacked_rate", "down", "up", "cpu", "online"].includes(nm) ? nm : "rate";
   notchActivityEnabled = inputs.notchActivity !== false && inputs.notchActivity !== "false";
   const sv = String(inputs.serverView || "auto");
   serverViewPref = ["auto", "cards", "table"].includes(sv) ? sv : "auto";
@@ -3445,35 +3443,6 @@ function buildNotchTrailing(metric, summary) {
       TX(`↑${formatShortRate(summary.netUp)}`, { fontSize: 8.5, fontWeight: 600, fontFeatures: "tnum", textColor: "#34d399" }),
       TX(`↓${formatShortRate(summary.netDown)}`, { fontSize: 8.5, fontWeight: 600, fontFeatures: "tnum", textColor: "#38bdf8" })
     );
-  }
-  if (metric === "rate_spark" || metric === "cpu_spark") {
-    const isCpu = metric === "cpu_spark";
-    const pts = buildSparkPoints(fleetHistory, isCpu ? "cpu" : "totalRate", 24);
-    const strokeHex = isCpu ? barHex(summary.avgCpu, PAL.blue) : PAL.sky;
-    const textNode = TX(formatCompactNotchValue(metric, summary), {
-      fontSize: 10.5,
-      fontWeight: 600,
-      fontFeatures: "tnum",
-      textColor: hasOffline ? PAL.red : "#ffffff",
-    });
-    if (pts.length > 1) {
-      return h("Row", { tw: "items-center gap-1" },
-        h("Chart", {
-          type: "area",
-          width: 24,
-          height: 14,
-          curve: "monotone",
-          grid: false,
-          legend: false,
-          axes: false,
-          hover: false,
-          strokeWidth: 1.2,
-          series: [{ name: isCpu ? "cpu" : "rate", color: strokeHex, points: pts }],
-        }),
-        textNode
-      );
-    }
-    return textNode;
   }
   const singleColor = hasOffline
     ? PAL.red

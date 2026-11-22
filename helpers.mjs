@@ -533,7 +533,7 @@ export function formatShortRate(bytesPerSec) {
 
 export function formatCompactNotchValue(metric, summary) {
   if (!summary || !summary.total) return "—";
-  if (metric === "cpu" || metric === "cpu_spark") return `${Math.round(Number(summary.avgCpu) || 0)}%`;
+  if (metric === "cpu") return `${Math.round(Number(summary.avgCpu) || 0)}%`;
   if (metric === "online") return `${summary.online}/${summary.total}`;
   if (metric === "down") return `↓${formatShortRate(summary.netDown)}`;
   if (metric === "up") return `↑${formatShortRate(summary.netUp)}`;

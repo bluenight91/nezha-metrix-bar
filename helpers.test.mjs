@@ -467,7 +467,6 @@ test("formatShortRate and formatCompactNotchValue fit compact notch budgets", ()
   assert.equal(formatCompactNotchValue("down", summary), "↓200K");
   assert.equal(formatCompactNotchValue("up", summary), "↑140K");
   assert.equal(formatCompactNotchValue("cpu", summary), "18%");
-  assert.equal(formatCompactNotchValue("cpu_spark", summary), "18%");
   assert.equal(formatCompactNotchValue("online", summary), "21/21");
 });
 
