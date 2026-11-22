@@ -2786,8 +2786,10 @@ function serviceRow(r) {
       TX(r.name, { tw: "text-[12.5px] font-semibold text-text truncate grow min-w-0" }),
       TX(r.typeLabel, { tw: "text-[9.5px] font-medium text-textMuted px-1.5 py-0.5 rounded bg-surfaceHover shrink-0" }),
       r.failing
-        ? TX("DOWN", { tw: "text-[10.5px] font-semibold text-[#ef4444] px-1.5 py-0.5 rounded bg-[#ef44441a] shrink-0" })
-        : TX(`${r.upPercent.toFixed(1)}%`, { tw: "text-[11px] font-semibold tabular-nums text-[#10b981] shrink-0" })
+        ? h("Row", { tw: "w-[46px] justify-end shrink-0" },
+            TX("DOWN", { tw: "text-[10px] font-semibold text-[#ef4444] px-1.5 py-0.5 rounded bg-[#ef44441a]" })
+          )
+        : TX(`${r.upPercent.toFixed(1)}%`, { tw: "w-[46px] text-right text-[11px] font-semibold tabular-nums text-[#10b981] shrink-0" })
     ),
     h("Row", { tw: "items-center w-full" },
       TX(r.target || "", { tw: "text-[10.5px] text-textMuted truncate" }),
@@ -2978,7 +2980,7 @@ function ruleRow(r) {
     statusDot(r.enable ? PAL.emerald : "surfaceHover", 6),
     TX(r.name || r.id, { tw: "text-[12px] text-text truncate grow min-w-0" }),
     TX(r.enable ? "ON" : "OFF", {
-      tw: `text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${r.enable ? "text-[#10b981] bg-[#10b9811a]" : "text-textMuted bg-surfaceHover"}`,
+      tw: `w-[32px] text-center text-[10px] font-semibold py-0.5 rounded shrink-0 ${r.enable ? "text-[#10b981] bg-[#10b9811a]" : "text-textMuted bg-surfaceHover"}`,
     })
   );
 }
