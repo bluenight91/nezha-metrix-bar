@@ -3,7 +3,7 @@
      widget="true"
      notch="true"
      category="monitoring"
-     version="2.0.0"
+     version="2.0.1"
      icon="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNMjEuMSAwdjE4Ni4yTDE1Mi40IDI2OCA0NjMuOCA3OC42IDQ0MS43IDc3VjB6IiBzdHlsZT0iZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojMGE5NGYyIi8+PHBhdGggZD0iTTE2My45IDM3MCAyMS4xIDI3OS45djEyOC4zTDIzMC43IDUxMmwyMDkuNi0xMDMuOFYxNzUuOEw0OTEgOTMuM3oiIHN0eWxlPSJmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOiMwMzM4ZDYiLz48L3N2Zz4="
      description="Monitor Nezha servers, service probes, cycle traffic, and live alerts from your menu bar, notch, and desktop widgets."
      license="AGPL-3.0-only"
@@ -127,6 +127,18 @@ const PAL = {
   red: "#ef4444",
   slate: "#64748b",
 };
+const LATENCY_PAL = [
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#8b5cf6",
+  "#ef4444",
+  "#06b6d4",
+  "#ec4899",
+  "#84cc16",
+  "#f97316",
+  "#14b8a6",
+];
 
 function isDarkTheme() {
   try {
@@ -526,6 +538,83 @@ function formatDuration(seconds) {
   return `${h}h ${m}m`;
 }
 
+function downsamplePoints(points, maxPoints = 120) {
+  if (!Array.isArray(points)) return [];
+  if (points.length <= maxPoints || maxPoints < 2) return points.slice();
+  const out = [];
+  const step = (points.length - 1) / (maxPoints - 1);
+  for (let i = 0; i < maxPoints; i++) {
+    out.push(points[Math.round(i * step)]);
+  }
+  return out;
+}
+
+function alignMonitorSeries(seriesPointsList, maxPoints = 120) {
+  const list = Array.isArray(seriesPointsList) ? seriesPointsList : [];
+  let minTs = Infinity;
+  let maxTs = -Infinity;
+  let maxLen = 0;
+  for (const pts of list) {
+    if (!Array.isArray(pts) || !pts.length) continue;
+    if (pts.length > maxLen) maxLen = pts.length;
+    for (const p of pts) {
+      const t = Number(p.ts);
+      if (!Number.isFinite(t)) continue;
+      if (t < minTs) minTs = t;
+      if (t > maxTs) maxTs = t;
+    }
+  }
+  if (!Number.isFinite(minTs) || !Number.isFinite(maxTs)) return list.map(() => []);
+  if (minTs === maxTs) {
+    return list.map(pts => (Array.isArray(pts) && pts.length ? [{ ts: minTs, value: pts[0].value }] : []));
+  }
+  const count = Math.min(Math.max(2, maxPoints), Math.max(2, maxLen));
+  const step = (maxTs - minTs) / (count - 1);
+  const snapMin = step >= 60_000;
+  const grid = [];
+  for (let i = 0; i < count; i++) {
+    const raw = minTs + i * step;
+    let t = snapMin ? Math.round(raw / 60_000) * 60_000 : Math.round(raw);
+    if (grid.length && t <= grid[grid.length - 1]) t = grid[grid.length - 1] + 1000;
+    grid.push(t);
+  }
+  const tol = Math.max(step * 0.75, 90_000);
+  return list.map(pts => {
+    if (!Array.isArray(pts) || !pts.length) return [];
+    let j = 0;
+    const out = [];
+    for (let i = 0; i < grid.length; i++) {
+      const target = grid[i];
+      while (j + 1 < pts.length && Math.abs(pts[j + 1].ts - target) <= Math.abs(pts[j].ts - target)) {
+        j += 1;
+      }
+      if (Math.abs(pts[j].ts - target) <= tol) {
+        out.push({ ts: target, value: pts[j].value });
+      }
+    }
+    return out;
+  });
+}
+
+function resolveDetailPeriod(period, hasToken) {
+  const p = String(period || "1d");
+  if (!hasToken) return "1d";
+  return p === "7d" || p === "30d" ? p : "1d";
+}
+
+function periodDays(period) {
+  return period === "30d" ? 30 : period === "7d" ? 7 : 1;
+}
+
+function toggleMonitorSelection(selected, id, totalCount = 0) {
+  const next = new Set(selected);
+  const key = String(id);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  if (totalCount > 0 && next.size >= totalCount) next.clear();
+  return next;
+}
+
 function buildMonitorRows(monitors) {
   const list = Array.isArray(monitors) ? monitors : [];
   const out = [];
@@ -535,29 +624,45 @@ function buildMonitorRows(monitors) {
     const delays = Array.isArray(m.avg_delay) ? m.avg_delay : [];
     const total = delays.length;
     let up = 0;
+    let sumDelay = 0;
+    let minDelay = Infinity;
+    let maxDelay = -Infinity;
     let lastDelay = null;
     const points = [];
     for (let i = 0; i < delays.length; i++) {
       const v = delays[i];
-      if (v == null || !Number.isFinite(Number(v))) continue;
+      const num = Number(v);
+      if (v == null || !Number.isFinite(num) || num <= 0) continue;
       up += 1;
-      lastDelay = Number(v);
-      if (i < ts.length) points.push({ ts: Number(ts[i]), value: Number(v) });
+      sumDelay += num;
+      if (num < minDelay) minDelay = num;
+      if (num > maxDelay) maxDelay = num;
+      lastDelay = num;
+      if (i < ts.length) points.push({ ts: Number(ts[i]), value: num });
     }
     const down = Math.max(0, total - up);
     out.push({
-      id: String(m.monitor_id ?? m.id ?? m.monitor_name ?? ""),
-      name: String(m.monitor_name || m.monitor_id || "?"),
+      id: String(m.monitor_id ?? m.service_id ?? m.id ?? m.monitor_name ?? ""),
+      name: String(m.monitor_name || m.service_name || m.monitor_id || "?"),
       displayIndex: Number(m.display_index) || 0,
       total,
       up,
       down,
       lossPct: total > 0 ? (down / total) * 100 : 0,
       delay: lastDelay,
+      avgDelay: up > 0 ? sumDelay / up : null,
+      minDelay: up > 0 ? minDelay : null,
+      maxDelay: up > 0 ? maxDelay : null,
       points,
     });
   }
-  out.sort((a, b) => (a.delay ?? Infinity) - (b.delay ?? Infinity) || a.name.localeCompare(b.name));
+  out.sort((a, b) => {
+    if (b.displayIndex !== a.displayIndex) return b.displayIndex - a.displayIndex;
+    const na = Number(a.id);
+    const nb = Number(b.id);
+    if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+    return a.name.localeCompare(b.name);
+  });
   return out;
 }
 
@@ -990,6 +1095,19 @@ const I18N = {
     copied: "已复制到剪贴板",
     period1d: "1天",
     period7d: "7天",
+    period30d: "30天",
+    detailOverview: "概览",
+    detailNetwork: "网络",
+    detailOnline: "在线",
+    colLine: "线路",
+    colDelay: "延迟",
+    colMinMax: "最低–最高",
+    colLoss: "丢包",
+    viewAllLines: "查看全部 ›",
+    allLines: "显示全部",
+    selectedLines: (n, total) => `已选 ${n}/${total}`,
+    latencyError: "延迟监控加载失败",
+    noOnlineHistory: "暂无在线历史记录",
     noMetrics: "暂无指标历史（可能未启用 TSDB）",
     loadingMetrics: "正在加载历史指标…",
     noHistory: "暂无历史指标",
@@ -1101,6 +1219,19 @@ const I18N = {
     copied: "Copied to clipboard",
     period1d: "1d",
     period7d: "7d",
+    period30d: "30d",
+    detailOverview: "Overview",
+    detailNetwork: "Network",
+    detailOnline: "Uptime",
+    colLine: "Monitor",
+    colDelay: "Latency",
+    colMinMax: "Min–Max",
+    colLoss: "Loss",
+    viewAllLines: "View all ›",
+    allLines: "Show all",
+    selectedLines: (n, total) => `${n}/${total} selected`,
+    latencyError: "Failed to load latency monitors",
+    noOnlineHistory: "No uptime history available",
     noMetrics: "No metric history (TSDB may be off)",
     loadingMetrics: "Loading metric history…",
     noHistory: "No metric history",
@@ -1216,6 +1347,9 @@ let sortDir = localStorage.getItem("nezha.sortDir") || (sortBy === "name" ? "asc
 let serverQuery = "";
 let selectedServerId = null;
 let detailPeriod = localStorage.getItem("nezha.period") || "1d";
+let detailTab = localStorage.getItem("nezha.detailTab") || "overview";
+if (detailTab !== "overview" && detailTab !== "network" && detailTab !== "online") detailTab = "overview";
+let selectedMonitorIdsByServer = new Map();
 let metricsCache = new Map();
 let cycleTransfers = [];
 let serviceFilter = "all";
@@ -1871,10 +2005,11 @@ async function refreshAll({ force = false } = {}) {
     const selected = resolveWidgetServer(servers, widgetServer || selectedServerId || "");
     if (selected.status === "ok") detailIds.add(String(selected.server.id));
   }
+  const activePeriod = resolveDetailPeriod(detailPeriod, !!apiToken);
   for (const id of detailIds) {
-    const key = `${id}:${detailPeriod}`;
+    const key = `${id}:${activePeriod}`;
     const cached = metricsCache.get(key);
-    if (!cached || !cached.loadedAt || Date.now() - cached.loadedAt > 60000) void loadMetrics(id);
+    if (!cached || !cached.loadedAt || Date.now() - cached.loadedAt > 60000) void loadMetrics(id, activePeriod);
   }
   $metrix.invalidate();
 }
@@ -1991,7 +2126,8 @@ function setMetricsCache(key, value) {
 }
 
 function loadMetrics(serverId, period = detailPeriod) {
-  const key = `${serverId}:${period}`;
+  const activePeriod = resolveDetailPeriod(period, !!apiToken);
+  const key = `${serverId}:${activePeriod}`;
   if (detailInflight.has(key)) return detailInflight.get(key);
   const generation = connectionGeneration;
   const prev = metricsCache.get(key) || {};
@@ -2000,13 +2136,15 @@ function loadMetrics(serverId, period = detailPeriod) {
   const promise = (async () => {
     try {
       const metrics = ["cpu", "memory", "net_in_speed", "net_out_speed"];
-      const qs = `period=${encodeURIComponent(period)}&aggregate=true`;
-      const days = period === "7d" ? 7 : 1;
-      const [metricResults, monitorsRes, onlineRes] = await Promise.all([
+      const qs = `period=${encodeURIComponent(activePeriod)}&aggregate=true`;
+      const days = periodDays(activePeriod);
+      const [metricResults, monitorsOutcome, onlineRes] = await Promise.all([
         Promise.all(metrics.map(m =>
           nezhaFetch(`/api/v1/server/${serverId}/metrics?metric=${m}&${qs}`).catch(() => null)
         )),
-        nezhaFetch(`/api/v1/service/${serverId}?period=${encodeURIComponent(period)}`).catch(() => null),
+        nezhaFetch(`/api/v1/server/${serverId}/service?period=${encodeURIComponent(activePeriod)}`)
+          .then(data => ({ ok: true, data }))
+          .catch(err => ({ ok: false, error: String(err && err.message || err) })),
         nezhaFetch(`/api/v1/server/${serverId}/online-history?days=${days}`).catch(() => null),
       ]);
       if (generation !== connectionGeneration) return;
@@ -2020,12 +2158,23 @@ function loadMetrics(serverId, period = detailPeriod) {
         error: "",
         loadedAt: Date.now(),
         series,
-        monitorRows: buildMonitorRows(monitorsRes),
+        monitorRows: monitorsOutcome.ok ? buildMonitorRows(monitorsOutcome.data) : [],
+        monitorsLoaded: monitorsOutcome.ok,
+        monitorsError: monitorsOutcome.ok ? "" : monitorsOutcome.error,
         online: onlineRes || null,
       });
     } catch (e) {
       if (generation !== connectionGeneration) return;
-      setMetricsCache(key, { loading: false, error: String(e && e.message || e), loadedAt: 0, series: {}, monitorRows: [], online: null });
+      setMetricsCache(key, {
+        loading: false,
+        error: String(e && e.message || e),
+        loadedAt: 0,
+        series: {},
+        monitorRows: [],
+        monitorsLoaded: false,
+        monitorsError: "",
+        online: null,
+      });
     } finally {
       detailInflight.delete(key);
       if (generation === connectionGeneration) $metrix.invalidate();
@@ -2037,11 +2186,11 @@ function loadMetrics(serverId, period = detailPeriod) {
 
 function chartFromPoints(pts, name, color, { divisor = 1, formatValue } = {}) {
   if (!Array.isArray(pts) || !pts.length) return null;
-  const tail = pts.slice(-120);
+  const sampled = downsamplePoints(pts, 120);
   return {
     name,
     color,
-    points: tail.map(p => {
+    points: sampled.map(p => {
       const raw = Number(p.value) || 0;
       const y = divisor > 1 ? Number((raw / divisor).toFixed(2)) : Number(raw.toFixed(2));
       const pt = { x: Number(p.ts) || 0, y };
@@ -2554,13 +2703,32 @@ function formatServerSummaryText(s) {
   ].join("\n");
 }
 
+function formatLatencyMs(v) {
+  if (v == null || !Number.isFinite(Number(v))) return "—";
+  return `${Number(v).toFixed(1)} ms`;
+}
+
+function formatLatencyBound(v) {
+  if (v == null || !Number.isFinite(Number(v))) return "—";
+  const n = Number(v);
+  if (n >= 10) return String(Math.round(n));
+  return String(Number(n.toFixed(1)));
+}
+
+function formatLossPct(p) {
+  const n = Math.max(0, Number(p) || 0);
+  if (n <= 0) return "0%";
+  return n >= 10 ? `${n.toFixed(0)}%` : `${n.toFixed(1)}%`;
+}
+
 function serverDetailBody(s) {
   const t = T();
   const st = s.state || {};
   const host = s.host || {};
   const id = String(s.id);
   const starred = watchlist.has(id);
-  const key = `${s.id}:${detailPeriod}`;
+  const activePeriod = resolveDetailPeriod(detailPeriod, !!apiToken);
+  const key = `${s.id}:${activePeriod}`;
   const cache = metricsCache.get(key) || {};
   const series = cache.series || {};
   const cpu = chartFromPoints(series.cpu, "CPU", PAL.blue, { formatValue: v => `${v.toFixed(1)}%` });
@@ -2576,42 +2744,119 @@ function serverDetailBody(s) {
   const memPct = pct(st.mem_used, host.mem_total);
   const diskPct = pct(st.disk_used, host.disk_total);
   const monitorRows = cache.monitorRows || [];
-  const latencyCharts = monitorRows
-    .filter(r => r.points.length)
-    .slice(0, 8)
-    .map(r => ({
-      name: r.name,
-      points: r.points.slice(-120).map(p => ({
+  const coloredMonitors = monitorRows.map((r, idx) => ({
+    row: r,
+    color: LATENCY_PAL[idx % LATENCY_PAL.length],
+  }));
+  const rawSelected = selectedMonitorIdsByServer.get(id);
+  const validMonitorIds = new Set(monitorRows.map(r => r.id));
+  const selectedIds = rawSelected
+    ? new Set([...rawSelected].filter(mid => validMonitorIds.has(mid)))
+    : new Set();
+  const hasSelection = selectedIds.size > 0 && selectedIds.size < monitorRows.length;
+  const selectedMonitors = hasSelection
+    ? coloredMonitors.filter(item => selectedIds.has(item.row.id))
+    : coloredMonitors;
+  const chartTargets = selectedMonitors.filter(item => item.row.points.length);
+  const alignedMonitorPoints = alignMonitorSeries(chartTargets.map(item => item.row.points), 120);
+  const latencyCharts = chartTargets
+    .map((item, idx) => ({
+      name: item.row.name,
+      color: item.color,
+      points: (alignedMonitorPoints[idx] || []).map(p => ({
         x: p.ts,
         y: Number(Number(p.value).toFixed(1)),
         valueLabel: `${Number(p.value).toFixed(1)} ms`,
       })),
-    }));
-  const days = detailPeriod === "7d" ? 7 : 1;
+    }))
+    .filter(s => s.points.length);
+  const days = periodDays(activePeriod);
   const online = cache.online ? buildOnlineSummary(cache.online, days * 86400) : null;
   const on = isServerOnline(s);
+  const activeDetailTab = detailTab === "network" || detailTab === "online" ? detailTab : "overview";
 
-  const monitorCard = r => h(
-    "Column",
-    { key: `mon-${r.id}`, tw: `gap-0.5 p-2.5 rounded-xl bg-background border border-${cardBorder()} grow basis-0 min-w-0` },
-    h("Row", { tw: "items-center gap-1 w-full" },
-      TX(r.name, { tw: "text-[10.5px] font-medium text-textMuted truncate" }),
-      h("Spacer"),
-      TX(r.lossPct > 0 ? `${r.lossPct.toFixed(1)}%` : "", {
-        tw: `text-[9.5px] tabular-nums ${r.lossPct >= 5 ? "text-[#ef4444]" : "text-[#f59e0b]"}`,
-      })
-    ),
-    TX(r.delay != null ? `${r.delay.toFixed(1)} ms` : "—", {
-      tw: `text-[13px] font-bold tabular-nums ${r.delay == null ? "text-[#ef4444]" : "text-text"}`,
-    })
-  );
-  const monitorGrid = chunk(monitorRows, 2).map((row, i) => {
-    const cells = row.map(monitorCard);
-    if (row.length === 1) cells.push(h("Box", { key: `mon-ph-${i}`, tw: "grow basis-0 min-w-0" }));
-    return h("Row", { key: `mon-row-${i}`, tw: "gap-2 w-full items-start" }, ...cells);
-  });
+  const monitorTableCard = monitorRows.length
+    ? h("Column", { tw: `gap-0 rounded-xl bg-background border border-${cardBorder()} overflow-hidden w-full` },
+        h("Row", { tw: "items-center gap-2 px-3 py-1.5 bg-surfaceHover w-full" },
+          TX(t.colLine, { tw: "text-[9.5px] font-semibold text-textMuted grow min-w-0" }),
+          TX(t.colDelay, { tw: "w-[58px] text-right text-[9.5px] font-semibold text-textMuted shrink-0", noWrap: true }),
+          TX(t.colMinMax, { tw: "w-[74px] text-right text-[9.5px] font-semibold text-textMuted shrink-0", noWrap: true }),
+          TX(t.colLoss, { tw: "w-[36px] text-right text-[9.5px] font-semibold text-textMuted shrink-0", noWrap: true })
+        ),
+        ...coloredMonitors.flatMap(({ row: r, color }, idx) => {
+          const isSelected = hasSelection && selectedIds.has(r.id);
+          const isDimmed = hasSelection && !isSelected;
+          const rangeText = r.minDelay != null && r.maxDelay != null
+            ? `${formatLatencyBound(r.minDelay)}–${formatLatencyBound(r.maxDelay)}`
+            : "—";
+          const lossCls = r.lossPct >= 5
+            ? "text-[#ef4444] font-semibold"
+            : r.lossPct > 0
+              ? "text-[#f59e0b] font-medium"
+              : "text-textMuted";
+          const rowNode = h("Row", {
+            key: `mon-${r.id}`,
+            tw: `items-center gap-2 px-3 py-2 w-full cursor-pointer hover:bg-surfaceHover ${isSelected ? "bg-surfaceHover" : ""} ${isDimmed ? "opacity-40" : ""}`,
+            onClick: () => {
+              const next = toggleMonitorSelection(selectedIds, r.id, monitorRows.length);
+              if (next.size > 0) selectedMonitorIdsByServer.set(id, next);
+              else selectedMonitorIdsByServer.delete(id);
+              $metrix.invalidate();
+            },
+          },
+            h("Box", { tw: `w-[10px] h-[3px] rounded-full bg-[${color}] shrink-0` }),
+            TX(r.name, { tw: `text-[11px] truncate grow min-w-0 ${isSelected ? "font-semibold text-text" : "font-medium text-text"}` }),
+            TX(formatLatencyMs(r.delay), {
+              tw: `w-[58px] text-right text-[11px] font-semibold tabular-nums shrink-0 ${r.delay == null ? "text-[#ef4444]" : "text-text"}`,
+              noWrap: true,
+            }),
+            TX(rangeText, {
+              tw: "w-[74px] text-right text-[10px] tabular-nums text-textMuted shrink-0",
+              noWrap: true,
+            }),
+            TX(formatLossPct(r.lossPct), {
+              tw: `w-[36px] text-right text-[10px] tabular-nums shrink-0 ${lossCls}`,
+              noWrap: true,
+            })
+          );
+          return idx === 0 ? [rowNode] : [Line(), rowNode];
+        })
+      )
+    : null;
+
+  const latencyTeaser = monitorRows.length
+    ? h("Column", {
+        key: "latency-teaser",
+        tw: `gap-2 py-2.5 px-3.5 rounded-xl bg-background border border-${cardBorder()} w-full cursor-pointer hover:bg-surfaceHover`,
+        onClick: () => {
+          detailTab = "network";
+          localStorage.setItem("nezha.detailTab", detailTab);
+          $metrix.invalidate();
+        },
+      },
+        h("Row", { tw: "items-center gap-2 w-full" },
+          TX(`${t.latency} (${monitorRows.length})`, { tw: "text-[11.5px] font-semibold text-textMuted" }),
+          h("Spacer"),
+          TX(t.viewAllLines, { tw: "text-[10.5px] font-medium text-[#0a94f2]" })
+        ),
+        h("Row", { tw: "gap-2 w-full items-center" },
+          ...coloredMonitors.slice(0, 3).map(({ row: r, color }) => h("Row", {
+            key: `teaser-${r.id}`,
+            tw: "items-center gap-1.5 py-1 px-2 rounded-lg bg-surfaceHover grow basis-0 min-w-0",
+          },
+            statusDot(color, 5),
+            TX(r.name, { tw: "text-[10px] text-textMuted truncate grow min-w-0" }),
+            TX(formatLatencyMs(r.delay), {
+              tw: `text-[10px] font-semibold tabular-nums shrink-0 ${r.delay == null ? "text-[#ef4444]" : "text-text"}`,
+              noWrap: true,
+            })
+          ))
+        )
+      )
+    : null;
 
   const dayHex = c => c === "success" ? PAL.emerald : c === "warning" ? PAL.amber : PAL.red;
+  const maxDailyBars = activePeriod === "30d" ? 30 : 7;
 
   const onlineSection = online
     ? h("Column", { tw: `gap-2.5 py-3 px-3.5 rounded-xl bg-background border border-${cardBorder()} w-full` },
@@ -2625,7 +2870,7 @@ function serverDetailBody(s) {
         online.daily.length
           ? h("Column", { tw: "gap-1.5 pt-1 w-full" },
               TX(t.dailyOnline, { tw: "text-[10px] text-textMuted" }),
-              ...buildDailyOnlineRows(online.daily, Date.now(), { start: online.windowStart, end: online.windowEnd }).slice(-7).map((d, i) => h("Row", { key: `day-${i}`, tw: "items-center gap-2.5 w-full" },
+              ...buildDailyOnlineRows(online.daily, Date.now(), { start: online.windowStart, end: online.windowEnd }).slice(-maxDailyBars).map((d, i) => h("Row", { key: `day-${i}`, tw: "items-center gap-2.5 w-full" },
                 TX(d.date.slice(5), { tw: "text-[10px] tabular-nums text-textMuted w-[38px] shrink-0", noWrap: true }),
                 h("Box", { tw: "grow min-w-0" }, capsuleBar(d.pct, dayHex(d.color), "h-[4px]")),
                 TX(`${formatDailyDuration(d.onlineSeconds)}${d.isToday ? " · " + t.inProgress : ""}`, {
@@ -2637,6 +2882,10 @@ function serverDetailBody(s) {
           : null
       )
     : null;
+
+  const periodItems = apiToken
+    ? [{ label: t.period1d, value: "1d" }, { label: t.period7d, value: "7d" }, { label: t.period30d, value: "30d" }]
+    : [{ label: t.period1d, value: "1d" }];
 
   const detailActions = h("Row", { tw: "items-center gap-1.5 w-full min-w-0" },
     statusDot(on ? PAL.emerald : PAL.red, 8),
@@ -2658,16 +2907,46 @@ function serverDetailBody(s) {
       onClick: () => { void copyText(formatServerSummaryText(s)); },
     }),
     CompactToggle(
-      [{ label: t.period1d, value: "1d" }, { label: t.period7d, value: "7d" }],
-      detailPeriod,
+      periodItems,
+      activePeriod,
       v => {
-        detailPeriod = String(v || "1d");
+        detailPeriod = resolveDetailPeriod(v, !!apiToken);
         localStorage.setItem("nezha.period", detailPeriod);
-        void loadMetrics(s.id);
+        void loadMetrics(s.id, detailPeriod);
         $metrix.invalidate();
       },
       "period"
     )
+  );
+
+  const detailSubTabs = h("Row", { tw: "items-center justify-between gap-2 w-full" },
+    CompactToggle(
+      [
+        { label: t.detailOverview, value: "overview" },
+        { label: monitorRows.length ? `${t.detailNetwork} (${monitorRows.length})` : t.detailNetwork, value: "network" },
+        { label: t.detailOnline, value: "online" },
+      ],
+      activeDetailTab,
+      v => {
+        detailTab = String(v || "overview");
+        localStorage.setItem("nezha.detailTab", detailTab);
+        $metrix.invalidate();
+      },
+      "detail-tab"
+    ),
+    activeDetailTab === "network" && hasSelection
+      ? h("Row", {
+          key: "clear-monitor-focus",
+          tw: "items-center gap-1.5 py-[3px] px-2 rounded-[6px] bg-surfaceHover cursor-pointer hover:bg-surfacePressed shrink-0",
+          onClick: () => {
+            selectedMonitorIdsByServer.delete(id);
+            $metrix.invalidate();
+          },
+        },
+          ...selectedMonitors.slice(0, 3).map(item => statusDot(item.color, 5)),
+          TX(`${t.allLines} (${selectedMonitors.length}/${monitorRows.length}) ×`, { tw: "text-[10px] font-medium text-textMuted" })
+        )
+      : null
   );
 
   const factRow = (label, value) => h("Column", { tw: "gap-0.5 grow basis-0 min-w-0" },
@@ -2675,56 +2954,94 @@ function serverDetailBody(s) {
     TX(value, { tw: "text-[11px] font-medium text-text tabular-nums truncate" })
   );
 
-  const cpuVal = Number(st.cpu || 0);
-  return {
-    detailActions,
-    nodes: [
-      h("Column", {
-        tw: `gap-2.5 py-3 px-3.5 rounded-xl bg-background border border-${cardBorder()} w-full`,
-        linearGradient: { from: `${on ? PAL.blue : PAL.red}0d`, to: "background", angle: 135 },
-      },
-        h("Row", { tw: "items-end gap-3 w-full" },
-          statCell(`${cpuVal.toFixed(0)}%`, "CPU", cpuVal >= 80 ? barHex(cpuVal) : "text", "d-cpu"),
-          statCell(`${memPct.toFixed(0)}%`, "MEM", memPct >= 80 ? barHex(memPct) : "text", "d-mem"),
-          statCell(`${diskPct.toFixed(0)}%`, "DISK", diskPct >= 80 ? barHex(diskPct) : "text", "d-disk"),
-          statCell(on ? t.online : t.offline, t.onlineSec, on ? PAL.emerald : PAL.red, "d-online", "text-[16px]")
-        ),
-        Line(),
-        h("Row", { tw: "gap-3 w-full" },
-          factRow(t.osLabel, `${host.platform || "?"} ${host.platform_version || ""} · ${host.arch || ""}`),
-          factRow(t.load, `${Number(st.load_1 || 0).toFixed(2)} / ${Number(st.load_5 || 0).toFixed(2)} / ${Number(st.load_15 || 0).toFixed(2)}`)
-        ),
-        h("Row", { tw: "gap-3 w-full" },
-          factRow(t.netLabel, `↓ ${formatRate(st.net_in_speed)} · ↑ ${formatRate(st.net_out_speed)}`),
-          factRow(t.transfer, `↓${formatBytes(st.net_in_transfer, 1, true)}  ↑${formatBytes(st.net_out_transfer, 1, true)}`)
-        )
-      ),
-      cache.loading ? h("Row", { tw: "items-center gap-2 px-1" }, h("Spinner", { tw: "size-[12px]" }), TX(t.loading, { tw: "text-[11.5px] text-textMuted" })) : null,
-      cache.error ? h("Row", { tw: "items-center gap-2 py-2 px-3 rounded-xl bg-surfaceHover" },
+  const loadingNode = cache.loading
+    ? h("Row", { tw: "items-center gap-2 px-1" }, h("Spinner", { tw: "size-[12px]" }), TX(t.loading, { tw: "text-[11.5px] text-textMuted" }))
+    : null;
+  const errorNode = cache.error
+    ? h("Row", { tw: "items-center gap-2 py-2 px-3 rounded-xl bg-surfaceHover" },
         TX(cache.error, { tw: "text-[11.5px] text-[#ef4444] grow min-w-0" }),
-        h("Button", { text: t.retry, onClick: () => { void loadMetrics(s.id); }, tw: "text-[10px]" })
-      ) : null,
-      resourceCharts.length ? metricChartCard(t.resourceChart, [{ label: "CPU", color: PAL.blue }, { label: "MEM", color: PAL.indigo }], resourceCharts, "area", 140, "%") : null,
-      networkCharts.length ? metricChartCard(t.networkChart, [{ label: t.downRate, color: PAL.sky }, { label: t.upRate, color: PAL.emerald }], networkCharts, "line", 140, netScale.unit) : null,
-      monitorRows.length
-        ? h("Column", { tw: "gap-2 w-full" },
+        h("Button", { text: t.retry, onClick: () => { void loadMetrics(s.id, activePeriod); }, tw: "text-[10px]" })
+      )
+    : null;
+
+  const cpuVal = Number(st.cpu || 0);
+  const overviewNodes = [
+    h("Column", {
+      tw: `gap-2.5 py-3 px-3.5 rounded-xl bg-background border border-${cardBorder()} w-full`,
+      linearGradient: { from: `${on ? PAL.blue : PAL.red}0d`, to: "background", angle: 135 },
+    },
+      h("Row", { tw: "items-end gap-3 w-full" },
+        statCell(`${cpuVal.toFixed(0)}%`, "CPU", cpuVal >= 80 ? barHex(cpuVal) : "text", "d-cpu"),
+        statCell(`${memPct.toFixed(0)}%`, "MEM", memPct >= 80 ? barHex(memPct) : "text", "d-mem"),
+        statCell(`${diskPct.toFixed(0)}%`, "DISK", diskPct >= 80 ? barHex(diskPct) : "text", "d-disk"),
+        statCell(on ? t.online : t.offline, t.onlineSec, on ? PAL.emerald : PAL.red, "d-online", "text-[16px]")
+      ),
+      Line(),
+      h("Row", { tw: "gap-3 w-full" },
+        factRow(t.osLabel, `${host.platform || "?"} ${host.platform_version || ""} · ${host.arch || ""}`),
+        factRow(t.load, `${Number(st.load_1 || 0).toFixed(2)} / ${Number(st.load_5 || 0).toFixed(2)} / ${Number(st.load_15 || 0).toFixed(2)}`)
+      ),
+      h("Row", { tw: "gap-3 w-full" },
+        factRow(t.netLabel, `↓ ${formatRate(st.net_in_speed)} · ↑ ${formatRate(st.net_out_speed)}`),
+        factRow(t.transfer, `↓${formatBytes(st.net_in_transfer, 1, true)}  ↑${formatBytes(st.net_out_transfer, 1, true)}`)
+      )
+    ),
+    loadingNode,
+    errorNode,
+    resourceCharts.length ? metricChartCard(t.resourceChart, [{ label: "CPU", color: PAL.blue }, { label: "MEM", color: PAL.indigo }], resourceCharts, "area", 140, "%") : null,
+    networkCharts.length ? metricChartCard(t.networkChart, [{ label: t.downRate, color: PAL.sky }, { label: t.upRate, color: PAL.emerald }], networkCharts, "line", 140, netScale.unit) : null,
+    latencyTeaser,
+    !cache.loading && !resourceCharts.length && !networkCharts.length
+      ? TX(t.noMetrics, { tw: "text-[11.5px] text-textMuted px-1" })
+      : null,
+  ];
+
+  const networkNodes = [
+    loadingNode,
+    errorNode,
+    cache.monitorsError
+      ? h("Row", { tw: `items-center gap-2 py-2.5 px-3 rounded-xl bg-background border border-[#ef444455] w-full` },
+          statusDot(PAL.red, 6),
+          h("Column", { tw: "gap-0.5 grow min-w-0" },
+            TX(t.latencyError, { tw: "text-[11.5px] font-semibold text-text" }),
+            TX(cache.monitorsError, { tw: "text-[10.5px] text-[#ef4444] truncate" })
+          ),
+          h("Button", { text: t.retry, onClick: () => { void loadMetrics(s.id, activePeriod); }, tw: "text-[10px]" })
+        )
+      : monitorRows.length
+        ? h("Column", { tw: "gap-2.5 w-full" },
             latencyCharts.length
-              ? metricChartCard(t.latency, [], latencyCharts, "line", 136, "ms")
-              : TX(t.latency, { tw: "text-[11px] font-semibold text-textMuted px-1" }),
-            ...monitorGrid
+              ? metricChartCard(
+                  t.latency,
+                  hasSelection
+                    ? (selectedMonitors.length <= 2
+                        ? selectedMonitors.map(item => ({ label: item.row.name, color: item.color }))
+                        : [{ label: t.selectedLines(selectedMonitors.length, monitorRows.length), color: selectedMonitors[0].color }])
+                    : [],
+                  latencyCharts,
+                  "line",
+                  156,
+                  "ms"
+                )
+              : null,
+            monitorTableCard
           )
-        : (!cache.loading && cache.monitorRows ? TX(t.latencyEmpty, { tw: "text-[11px] text-textMuted px-1" }) : null),
-      onlineSection,
-      !cache.loading && !resourceCharts.length && !networkCharts.length
-        ? TX(t.noMetrics, { tw: "text-[11.5px] text-textMuted px-1" })
-        : null,
-    ].filter(Boolean),
-  };
+        : (!cache.loading && cache.monitorsLoaded ? TX(t.latencyEmpty, { tw: "text-[11.5px] text-textMuted px-1" }) : null),
+  ];
+
+  const onlineNodes = [
+    loadingNode,
+    errorNode,
+    onlineSection || (!cache.loading ? TX(t.noOnlineHistory, { tw: "text-[11.5px] text-textMuted px-1" }) : null),
+  ];
+
+  const nodes = (activeDetailTab === "network" ? networkNodes : activeDetailTab === "online" ? onlineNodes : overviewNodes).filter(Boolean);
+  return { detailActions, detailSubTabs, nodes };
 }
 
 function serverDetail(s) {
   const t = T();
-  const { detailActions, nodes } = serverDetailBody(s);
+  const { detailActions, detailSubTabs, nodes } = serverDetailBody(s);
   return panelShell(
     [
       brandHeader(false),
@@ -2737,6 +3054,7 @@ function serverDetail(s) {
         }),
         h("Row", { tw: "grow min-w-0" }, detailActions)
       ),
+      detailSubTabs,
     ],
     nodes
   );
@@ -2782,6 +3100,7 @@ function serversPanel(viewportWidth = 0) {
         h("Box", { tw: `w-px bg-${cardBorder()} self-stretch shrink-0` }),
         h("Column", { width: 410, shrink: 0, minHeight: 0, tw: "gap-2.5 px-4 py-3" },
           detailBlock ? detailBlock.detailActions : null,
+          detailBlock ? detailBlock.detailSubTabs : null,
           h("Scroll", { grow: 1, minHeight: 0, fillWidth: true },
             detailBlock
               ? h("Column", { tw: "gap-2.5 w-full pb-2" }, ...detailBlock.nodes)
@@ -3313,7 +3632,8 @@ function serverWidget(family) {
       h("Spacer"), widgetCompactResources(server)
     );
   }
-  const cache = metricsCache.get(`${server.id}:${detailPeriod}`) || {};
+  const activePeriod = resolveDetailPeriod(detailPeriod, !!apiToken);
+  const cache = metricsCache.get(`${server.id}:${activePeriod}`) || {};
   const series = cache.series || {};
   const chartCells = [];
   if (family === "large" && caps.widgetChart) {
@@ -3676,9 +3996,10 @@ export default {
         launchRefresh();
       }
       if (demand.panel && selectedServerId) {
-        const cached = metricsCache.get(`${selectedServerId}:${detailPeriod}`);
+        const activePeriod = resolveDetailPeriod(detailPeriod, !!apiToken);
+        const cached = metricsCache.get(`${selectedServerId}:${activePeriod}`);
         if (!cached || !cached.loadedAt || Date.now() - cached.loadedAt > 60000) {
-          void loadMetrics(selectedServerId);
+          void loadMetrics(selectedServerId, activePeriod);
         }
       }
       $metrix.invalidate();

@@ -20,6 +20,11 @@ import {
   formatMonthDayTime,
   formatDuration,
   buildMonitorRows,
+  toggleMonitorSelection,
+  alignMonitorSeries,
+  downsamplePoints,
+  resolveDetailPeriod,
+  periodDays,
   buildOnlineSummary,
   buildDailyOnlineRows,
   formatDailyDuration,
@@ -567,4 +572,91 @@ test("pickRateScale chooses human-friendly rate units for chart Y axes", () => {
   assert.deepEqual(pickRateScale(800 * 1024), { divisor: 1024, unit: "KB/s" });
   assert.deepEqual(pickRateScale(2_000_000), { divisor: 1024 ** 2, unit: "MB/s" });
   assert.deepEqual(pickRateScale(2 * 1024 ** 3), { divisor: 1024 ** 3, unit: "GB/s" });
+});
+
+test("buildMonitorRows treats zero/negative delays as packet loss, computes min/max/avg, and sorts by display_index", () => {
+  const rows = buildMonitorRows([
+    { monitor_id: 9, monitor_name: "Cloudflare", display_index: 1, created_at: [1, 2, 3, 4], avg_delay: [1.5, 0, 2.5, 1.0] },
+    { monitor_id: 2, monitor_name: "Chinanet", display_index: 10, created_at: [1, 2, 3, 4], avg_delay: [290, 142, 363, -1] },
+    { monitor_id: 1, monitor_name: "Unicom", display_index: 10, created_at: [1, 2], avg_delay: [0, 0] },
+  ]);
+  assert.deepEqual(rows.map(r => r.name), ["Unicom", "Chinanet", "Cloudflare"]);
+
+  assert.equal(rows[0].lossPct, 100);
+  assert.equal(rows[0].delay, null);
+  assert.equal(rows[0].avgDelay, null);
+  assert.equal(rows[0].minDelay, null);
+  assert.equal(rows[0].maxDelay, null);
+  assert.equal(rows[0].points.length, 0);
+
+  assert.equal(rows[1].lossPct, 25);
+  assert.equal(rows[1].delay, 363);
+  assert.equal(rows[1].minDelay, 142);
+  assert.equal(rows[1].maxDelay, 363);
+  assert.equal(Number(rows[1].avgDelay.toFixed(1)), 265.0);
+  assert.equal(rows[1].points.length, 3);
+
+  assert.equal(rows[2].lossPct, 25);
+  assert.equal(rows[2].delay, 1.0);
+  assert.equal(rows[2].minDelay, 1.0);
+  assert.equal(rows[2].maxDelay, 2.5);
+  assert.equal(Number(rows[2].avgDelay.toFixed(2)), 1.67);
+});
+
+test("downsamplePoints preserves full time span within maxPoints", () => {
+  const short = [{ ts: 1, value: 1 }, { ts: 2, value: 2 }];
+  assert.deepEqual(downsamplePoints(short, 10), short);
+
+  const many = Array.from({ length: 300 }, (_, i) => ({ ts: 1000 + i * 60_000, value: i + 1 }));
+  const sampled = downsamplePoints(many, 60);
+  assert.equal(sampled.length, 60);
+  assert.equal(sampled[0].ts, many[0].ts);
+  assert.equal(sampled[sampled.length - 1].ts, many[many.length - 1].ts);
+});
+
+test("resolveDetailPeriod clamps guests to 1d and allows 30d with auth", () => {
+  assert.equal(resolveDetailPeriod("7d", false), "1d");
+  assert.equal(resolveDetailPeriod("30d", false), "1d");
+  assert.equal(resolveDetailPeriod("1d", true), "1d");
+  assert.equal(resolveDetailPeriod("7d", true), "7d");
+  assert.equal(resolveDetailPeriod("30d", true), "30d");
+  assert.equal(resolveDetailPeriod("invalid", true), "1d");
+  assert.equal(periodDays("1d"), 1);
+  assert.equal(periodDays("7d"), 7);
+  assert.equal(periodDays("30d"), 30);
+});
+
+test("toggleMonitorSelection supports multi-select comparison and auto-resets when all selected", () => {
+  let sel = new Set();
+  sel = toggleMonitorSelection(sel, "1", 3);
+  assert.deepEqual([...sel], ["1"]);
+  sel = toggleMonitorSelection(sel, "2", 3);
+  assert.deepEqual([...sel], ["1", "2"]);
+  // Selecting the 3rd of 3 collapses back to empty (= show all)
+  sel = toggleMonitorSelection(sel, "3", 3);
+  assert.equal(sel.size, 0);
+
+  // Removing an existing selection keeps remaining items
+  sel = toggleMonitorSelection(new Set(["1", "2"]), "1", 3);
+  assert.deepEqual([...sel], ["2"]);
+  sel = toggleMonitorSelection(sel, "2", 3);
+  assert.equal(sel.size, 0);
+});
+
+test("alignMonitorSeries snaps staggered monitor timestamps onto a shared x grid", () => {
+  const base = 1795300020000;
+  const ptsA = Array.from({ length: 200 }, (_, i) => ({ ts: base + i * 60_000, value: 200 + (i % 10) }));
+  // Staggered by +30s and missing one point in the middle (simulating packet loss)
+  const ptsB = Array.from({ length: 200 }, (_, i) => ({ ts: base + i * 60_000 + 30_000, value: 1.5 }))
+    .filter((_, i) => i !== 75);
+
+  const aligned = alignMonitorSeries([ptsA, ptsB], 60);
+  assert.equal(aligned.length, 2);
+  assert.equal(aligned[0].length, 60);
+  assert.equal(aligned[1].length, 60);
+  assert.deepEqual(
+    aligned[0].map(p => p.ts),
+    aligned[1].map(p => p.ts),
+    "all active monitors must share identical x timestamps for multi-series hover"
+  );
 });

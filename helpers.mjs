@@ -359,6 +359,83 @@ export function formatDuration(seconds) {
   return `${h}h ${m}m`;
 }
 
+export function downsamplePoints(points, maxPoints = 120) {
+  if (!Array.isArray(points)) return [];
+  if (points.length <= maxPoints || maxPoints < 2) return points.slice();
+  const out = [];
+  const step = (points.length - 1) / (maxPoints - 1);
+  for (let i = 0; i < maxPoints; i++) {
+    out.push(points[Math.round(i * step)]);
+  }
+  return out;
+}
+
+export function alignMonitorSeries(seriesPointsList, maxPoints = 120) {
+  const list = Array.isArray(seriesPointsList) ? seriesPointsList : [];
+  let minTs = Infinity;
+  let maxTs = -Infinity;
+  let maxLen = 0;
+  for (const pts of list) {
+    if (!Array.isArray(pts) || !pts.length) continue;
+    if (pts.length > maxLen) maxLen = pts.length;
+    for (const p of pts) {
+      const t = Number(p.ts);
+      if (!Number.isFinite(t)) continue;
+      if (t < minTs) minTs = t;
+      if (t > maxTs) maxTs = t;
+    }
+  }
+  if (!Number.isFinite(minTs) || !Number.isFinite(maxTs)) return list.map(() => []);
+  if (minTs === maxTs) {
+    return list.map(pts => (Array.isArray(pts) && pts.length ? [{ ts: minTs, value: pts[0].value }] : []));
+  }
+  const count = Math.min(Math.max(2, maxPoints), Math.max(2, maxLen));
+  const step = (maxTs - minTs) / (count - 1);
+  const snapMin = step >= 60_000;
+  const grid = [];
+  for (let i = 0; i < count; i++) {
+    const raw = minTs + i * step;
+    let t = snapMin ? Math.round(raw / 60_000) * 60_000 : Math.round(raw);
+    if (grid.length && t <= grid[grid.length - 1]) t = grid[grid.length - 1] + 1000;
+    grid.push(t);
+  }
+  const tol = Math.max(step * 0.75, 90_000);
+  return list.map(pts => {
+    if (!Array.isArray(pts) || !pts.length) return [];
+    let j = 0;
+    const out = [];
+    for (let i = 0; i < grid.length; i++) {
+      const target = grid[i];
+      while (j + 1 < pts.length && Math.abs(pts[j + 1].ts - target) <= Math.abs(pts[j].ts - target)) {
+        j += 1;
+      }
+      if (Math.abs(pts[j].ts - target) <= tol) {
+        out.push({ ts: target, value: pts[j].value });
+      }
+    }
+    return out;
+  });
+}
+
+export function resolveDetailPeriod(period, hasToken) {
+  const p = String(period || "1d");
+  if (!hasToken) return "1d";
+  return p === "7d" || p === "30d" ? p : "1d";
+}
+
+export function periodDays(period) {
+  return period === "30d" ? 30 : period === "7d" ? 7 : 1;
+}
+
+export function toggleMonitorSelection(selected, id, totalCount = 0) {
+  const next = new Set(selected);
+  const key = String(id);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  if (totalCount > 0 && next.size >= totalCount) next.clear();
+  return next;
+}
+
 export function buildMonitorRows(monitors) {
   const list = Array.isArray(monitors) ? monitors : [];
   const out = [];
@@ -368,29 +445,45 @@ export function buildMonitorRows(monitors) {
     const delays = Array.isArray(m.avg_delay) ? m.avg_delay : [];
     const total = delays.length;
     let up = 0;
+    let sumDelay = 0;
+    let minDelay = Infinity;
+    let maxDelay = -Infinity;
     let lastDelay = null;
     const points = [];
     for (let i = 0; i < delays.length; i++) {
       const v = delays[i];
-      if (v == null || !Number.isFinite(Number(v))) continue;
+      const num = Number(v);
+      if (v == null || !Number.isFinite(num) || num <= 0) continue;
       up += 1;
-      lastDelay = Number(v);
-      if (i < ts.length) points.push({ ts: Number(ts[i]), value: Number(v) });
+      sumDelay += num;
+      if (num < minDelay) minDelay = num;
+      if (num > maxDelay) maxDelay = num;
+      lastDelay = num;
+      if (i < ts.length) points.push({ ts: Number(ts[i]), value: num });
     }
     const down = Math.max(0, total - up);
     out.push({
-      id: String(m.monitor_id ?? m.id ?? m.monitor_name ?? ""),
-      name: String(m.monitor_name || m.monitor_id || "?"),
+      id: String(m.monitor_id ?? m.service_id ?? m.id ?? m.monitor_name ?? ""),
+      name: String(m.monitor_name || m.service_name || m.monitor_id || "?"),
       displayIndex: Number(m.display_index) || 0,
       total,
       up,
       down,
       lossPct: total > 0 ? (down / total) * 100 : 0,
       delay: lastDelay,
+      avgDelay: up > 0 ? sumDelay / up : null,
+      minDelay: up > 0 ? minDelay : null,
+      maxDelay: up > 0 ? maxDelay : null,
       points,
     });
   }
-  out.sort((a, b) => (a.delay ?? Infinity) - (b.delay ?? Infinity) || a.name.localeCompare(b.name));
+  out.sort((a, b) => {
+    if (b.displayIndex !== a.displayIndex) return b.displayIndex - a.displayIndex;
+    const na = Number(a.id);
+    const nb = Number(b.id);
+    if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+    return a.name.localeCompare(b.name);
+  });
   return out;
 }
 
