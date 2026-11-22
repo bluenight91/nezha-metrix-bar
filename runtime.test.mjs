@@ -460,12 +460,12 @@ test("manual refresh during a slow domain queues another server refresh", async 
 });
 
 
-test("panel uses adaptive height without fixed preferredHeight and expands in wide viewports", async () => {
+test("panel uses 4-row flyout height above 6 servers, adaptive height at or below 6, and expands in wide viewports", async () => {
   const servers = Array.from({ length: 8 }, (_, i) => ({
     id: i + 1,
     name: `node-${i + 1}`,
     online: true,
-    state: { cpu: (i + 1) * 5, mem_used: 512, net_in_speed: 1024, net_out_speed: 512, load_1: 0.5 },
+    state: { cpu: i === 0 ? 1.4861024539067334e-10 : (i + 1) * 5, mem_used: 512, net_in_speed: 1024, net_out_speed: 512, load_1: 0.5 },
     host: { mem_total: 1024, disk_total: 1024 },
   }));
   const { dashboard } = loadDashboard({
@@ -482,11 +482,13 @@ test("panel uses adaptive height without fixed preferredHeight and expands in wi
   const flyoutEnv = { inputs: { baseURL: "https://one.example.com" } };
   await dashboard.scheduled(flyoutEnv);
   const flyoutPanel = dashboard.render(flyoutEnv).panel;
-  assert.equal(flyoutPanel.props.preferredHeight, undefined);
+  assert.equal(flyoutPanel.props.preferredHeight, 744);
   assert.equal(flyoutPanel.props.preferredWidth, 520);
+  assert.ok(!JSON.stringify(flyoutPanel).includes("e-10"));
 
   findNode(flyoutPanel, node => node.props?.key === "groups").props.onChange("1");
   const filteredPanel = dashboard.render(flyoutEnv).panel;
+  assert.equal(filteredPanel.props.preferredHeight, undefined);
   assert.ok(JSON.stringify(filteredPanel).includes("node-1"));
   assert.ok(!JSON.stringify(filteredPanel).includes("node-8"));
 

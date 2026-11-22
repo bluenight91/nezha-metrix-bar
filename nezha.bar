@@ -1932,9 +1932,11 @@ function toggleSort(column) {
 
 function capsuleBar(pctVal, colorHexOrToken, heightCls = "h-[3.5px]") {
   const p = Math.max(0, Math.min(100, Number(pctVal) || 0));
+  const rounded = Number(p.toFixed(1));
+  const widthStr = rounded % 1 === 0 ? String(rounded) : rounded.toFixed(1);
   const fillCls = String(colorHexOrToken || "").startsWith("#") ? `bg-[${colorHexOrToken}]` : `bg-${colorHexOrToken || "[#3b82f6]"}`;
   return h("Row", { tw: `${heightCls} w-full rounded-full bg-surfaceHover overflow-hidden` },
-    p > 0 ? h("Box", { key: "progress-fill", tw: `h-full w-[${p}%] rounded-full ${fillCls}` }) : null
+    rounded > 0 ? h("Box", { key: "progress-fill", tw: `h-full w-[${widthStr}%] rounded-full ${fillCls}` }) : null
   );
 }
 
@@ -2459,7 +2461,7 @@ function serverGrid(list, selectedId) {
   });
 }
 
-function panelShell(header, body, { width = 520, isWide = false } = {}) {
+function panelShell(header, body, { width = 520, height, isWide = false } = {}) {
   const statusBody = [
     ...body,
     error && loadedAt ? h("Row", { tw: "gap-2 py-2 px-3 rounded-xl bg-surfaceHover items-center w-full" },
@@ -2468,9 +2470,17 @@ function panelShell(header, body, { width = 520, isWide = false } = {}) {
       h("Button", { text: T().retry, onClick: launchRefresh, tw: "text-[10.5px]" })
     ) : null,
   ];
+  const rootProps = {
+    preferredWidth: isWide ? Math.max(920, width) : width,
+    fill: true,
+    minHeight: 0,
+    safeArea: true,
+    tw: "gap-0 text-text",
+  };
+  if (height != null && !isWide) rootProps.preferredHeight = height;
   return h(
     "Column",
-    { preferredWidth: isWide ? Math.max(920, width) : width, fill: true, minHeight: 0, safeArea: true, tw: "gap-0 text-text" },
+    rootProps,
     h("Column", { tw: "gap-2.5 px-4 pt-3 pb-2.5 w-full" }, ...header),
     Line(),
     h(
@@ -2751,9 +2761,13 @@ function serversPanel(viewportWidth = 0) {
   const body = list.length
     ? (effectiveView === "table" ? serverTable(list, selectedServerId, true) : serverGrid(list, selectedServerId))
     : [TX(t.emptyServers, { tw: "text-[12px] text-textMuted" })];
+  const fourRowHeight = list.length > 6
+    ? 664 + (groups.length > 0 ? 40 : 0) + (servers.size > 6 ? 40 : 0) + (wsDegraded ? 22 : 0) + (error && loadedAt ? 42 : 0)
+    : undefined;
   return panelShell(
     [brandHeader(false), topTabs(), overviewCard(), serversToolbar(effectiveView === "table")],
-    wsDegraded ? [TX(t.wsDegraded, { tw: "text-[11px] text-[#f59e0b] line-clamp-1" }), ...body] : body
+    wsDegraded ? [TX(t.wsDegraded, { tw: "text-[11px] text-[#f59e0b] line-clamp-1" }), ...body] : body,
+    { height: fourRowHeight }
   );
 }
 
