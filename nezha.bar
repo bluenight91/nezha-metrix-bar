@@ -52,9 +52,14 @@
     </input>
     <input name="notchMetric" type="select" label="Notch Compact Metric" default="rate"
            help="Metric shown on the right wing of the notch (Metrix.Bar Plus on macOS / Windows).">
-      <locale lang="zh-Hans" label="刘海屏紧凑指标" help="刘海屏右侧显示的紧凑数值（需 Metrix.Bar Plus，支持 macOS / Windows）。" />
+      <locale lang="zh-Hans" label="刘海屏紧凑指标" help="刘海屏右侧翼显示的紧凑数值或图表（需 Metrix.Bar Plus，支持 macOS / Windows）。" />
       <option value="rate" label="Aggregate Rate (340K)"><locale lang="zh-Hans" label="聚合网速（如 340K）" /></option>
+      <option value="stacked_rate" label="Stacked ↑↓ Rate"><locale lang="zh-Hans" label="双行上下行速率（↑上行 / ↓下行）" /></option>
+      <option value="down" label="Download Rate (↓188K)"><locale lang="zh-Hans" label="下行速率（如 ↓188K）" /></option>
+      <option value="up" label="Upload Rate (↑170K)"><locale lang="zh-Hans" label="上行速率（如 ↑170K）" /></option>
+      <option value="rate_spark" label="Rate + Sparkline"><locale lang="zh-Hans" label="聚合网速 + 迷你流量图" /></option>
       <option value="cpu" label="Average CPU (18%)"><locale lang="zh-Hans" label="平均 CPU（如 18%）" /></option>
+      <option value="cpu_spark" label="CPU + Sparkline"><locale lang="zh-Hans" label="平均 CPU + 迷你趋势图" /></option>
       <option value="online" label="Online Count (21/21)"><locale lang="zh-Hans" label="在线数（如 21/21）" /></option>
     </input>
     <input name="notchActivity" type="bool" label="Notch Alert Island" default="true"
@@ -695,8 +700,10 @@ function formatShortRate(bytesPerSec) {
 
 function formatCompactNotchValue(metric, summary) {
   if (!summary || !summary.total) return "—";
-  if (metric === "cpu") return `${Math.round(Number(summary.avgCpu) || 0)}%`;
+  if (metric === "cpu" || metric === "cpu_spark") return `${Math.round(Number(summary.avgCpu) || 0)}%`;
   if (metric === "online") return `${summary.online}/${summary.total}`;
+  if (metric === "down") return `↓${formatShortRate(summary.netDown)}`;
+  if (metric === "up") return `↑${formatShortRate(summary.netUp)}`;
   return formatShortRate((Number(summary.netDown) || 0) + (Number(summary.netUp) || 0));
 }
 
@@ -1463,7 +1470,7 @@ function syncInputs(env) {
     trayFormat = tf;
   }
   const nm = String(inputs.notchMetric || "rate");
-  notchMetric = ["rate", "cpu", "online"].includes(nm) ? nm : "rate";
+  notchMetric = ["rate", "stacked_rate", "down", "up", "rate_spark", "cpu", "cpu_spark", "online"].includes(nm) ? nm : "rate";
   notchActivityEnabled = inputs.notchActivity !== false && inputs.notchActivity !== "false";
   const sv = String(inputs.serverView || "auto");
   serverViewPref = ["auto", "cards", "table"].includes(sv) ? sv : "auto";
@@ -3428,6 +3435,57 @@ function notchKpiCard(key, label, value, hexColor, sparkKey, valueHex = "#ffffff
   );
 }
 
+function buildNotchTrailing(metric, summary) {
+  if (!loadedAt) {
+    return TX("…", { fontSize: 11, fontWeight: 600, fontFeatures: "tnum", textColor: "#ffffff" });
+  }
+  const hasOffline = summary.offline > 0;
+  if (metric === "stacked_rate") {
+    return h("Column", { tw: "items-end justify-center gap-0" },
+      TX(`↑${formatShortRate(summary.netUp)}`, { fontSize: 8.5, fontWeight: 600, fontFeatures: "tnum", textColor: "#34d399" }),
+      TX(`↓${formatShortRate(summary.netDown)}`, { fontSize: 8.5, fontWeight: 600, fontFeatures: "tnum", textColor: "#38bdf8" })
+    );
+  }
+  if (metric === "rate_spark" || metric === "cpu_spark") {
+    const isCpu = metric === "cpu_spark";
+    const pts = buildSparkPoints(fleetHistory, isCpu ? "cpu" : "totalRate", 24);
+    const strokeHex = isCpu ? barHex(summary.avgCpu, PAL.blue) : PAL.sky;
+    const textNode = TX(formatCompactNotchValue(metric, summary), {
+      fontSize: 10.5,
+      fontWeight: 600,
+      fontFeatures: "tnum",
+      textColor: hasOffline ? PAL.red : "#ffffff",
+    });
+    if (pts.length > 1) {
+      return h("Row", { tw: "items-center gap-1" },
+        h("Chart", {
+          type: "area",
+          width: 24,
+          height: 14,
+          curve: "monotone",
+          grid: false,
+          legend: false,
+          axes: false,
+          hover: false,
+          strokeWidth: 1.2,
+          series: [{ name: isCpu ? "cpu" : "rate", color: strokeHex, points: pts }],
+        }),
+        textNode
+      );
+    }
+    return textNode;
+  }
+  const singleColor = hasOffline
+    ? PAL.red
+    : (metric === "down" ? "#38bdf8" : metric === "up" ? "#34d399" : "#ffffff");
+  return TX(formatCompactNotchValue(metric, summary), {
+    fontSize: 11,
+    fontWeight: 600,
+    fontFeatures: "tnum",
+    textColor: singleColor,
+  });
+}
+
 function notchTree(demand) {
   if (caps.notch === false) return undefined;
   const t = T();
@@ -3440,10 +3498,7 @@ function notchTree(demand) {
     : (attn.length > 0 || unread > 0 ? PAL.amber : PAL.brand);
 
   const compactLeading = h("Icon", { svg: BRAND, tw: `size-[15px] text-[${healthHex}]` });
-  const compactTrailing = TX(
-    loadedAt ? formatCompactNotchValue(notchMetric, summary) : "…",
-    { fontSize: 11, fontWeight: 600, fontFeatures: "tnum", textColor: summary.offline > 0 ? PAL.red : "#ffffff" }
-  );
+  const compactTrailing = buildNotchTrailing(notchMetric, summary);
   const minimal = h("Icon", { svg: BRAND, tw: `size-[14px] text-[${healthHex}]` });
 
   const view = {

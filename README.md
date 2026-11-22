@@ -71,7 +71,7 @@ https://awesome.metrix.bar/dashboards/index.json
 | `refreshInterval` | select | 轮询间隔：2s / 5s（默认）/ 10s / 30s / 60s |
 | `liveUpdates` | bool | 游客模式使用 WebSocket + 30 秒 REST 对账（默认开）；关闭则完全 REST；PAT 始终 REST |
 | `trayFormat` | select | 托盘显示：4 种文本格式 + 3 种 macOS 富渲染格式（`stacked_rate` / `rate_spark` / `cpu_spark`） |
-| `notchMetric` | select | 刘海屏右侧紧凑指标：`rate` 聚合网速（默认）/ `cpu` 平均 CPU / `online` 在线数 |
+| `notchMetric` | select | 刘海屏右侧翼紧凑指标：`rate` 聚合网速（默认）/ `stacked_rate` 双行上下行 / `down` 下行 / `up` 上行 / `rate_spark` 网速+迷你图 / `cpu` 平均 CPU / `cpu_spark` CPU+迷你图 / `online` 在线数 |
 | `notchActivity` | bool | 离线 / 探针异常 / 流量超限 / Inbox 告警时弹出刘海屏动态岛（默认开） |
 | `serverView` | select | 服务器布局：`auto` 自动（默认，弹窗卡片 / 宽窗表格）/ `cards` 卡片 / `table` 表格 |
 | `widgetMode` | select | 桌面小组件：`overview` 总览（默认）/ `server` 单机 / `traffic` 周期流量 / `attention` 关注 |
@@ -88,7 +88,7 @@ PAT 在管理前端 **设置 → API Tokens** 创建；Token 只会保存在系�
 
 ```sh
 git clone https://github.com/bluenight91/nezha-metrix-bar
-node --test helpers.test.mjs runtime.test.mjs   # 纯函数 + 真实 .bar 脚本运行时测试（78 个）
+node --test helpers.test.mjs runtime.test.mjs   # 纯函数 + 真实 .bar 脚本运行时测试（79 个）
 ```
 
 - `nezha.bar` — 看板本体（单文件，协议 v0）

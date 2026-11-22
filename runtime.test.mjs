@@ -969,3 +969,37 @@ test("detail network chart scales raw bytes/s into human-readable MB/s with unit
   assert.ok(!text.includes("2097152"));
   assert.ok(text.includes('"12.3%"'));
 });
+
+test("notchMetric supports stacked_rate, down, up, rate_spark, and cpu_spark right-wing modes", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1760000000000 });
+  const { dashboard } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    capabilities: { "render.notch": true },
+    fetchImpl: async url => response(widgetPayload(new URL(url).pathname)),
+  });
+  await dashboard.scheduled({ inputs: { baseURL: "https://one.example.com", notchMetric: "stacked_rate" } });
+  t.mock.timers.tick(5000);
+  await dashboard.scheduled({ inputs: { baseURL: "https://one.example.com", notchMetric: "stacked_rate" } });
+
+  const stacked = dashboard.render({ inputs: { baseURL: "https://one.example.com", notchMetric: "stacked_rate" } }).notch.compact.trailing;
+  assert.equal(stacked.type, "Column");
+  assert.equal(stacked.children.length, 2);
+  assert.ok(stacked.children[0].props.text.startsWith("↑"));
+  assert.ok(stacked.children[1].props.text.startsWith("↓"));
+
+  const down = dashboard.render({ inputs: { baseURL: "https://one.example.com", notchMetric: "down" } }).notch.compact.trailing;
+  assert.equal(down.type, "Text");
+  assert.ok(down.props.text.startsWith("↓"));
+
+  const up = dashboard.render({ inputs: { baseURL: "https://one.example.com", notchMetric: "up" } }).notch.compact.trailing;
+  assert.equal(up.type, "Text");
+  assert.ok(up.props.text.startsWith("↑"));
+
+  const rateSpark = dashboard.render({ inputs: { baseURL: "https://one.example.com", notchMetric: "rate_spark" } }).notch.compact.trailing;
+  assert.equal(rateSpark.type, "Row");
+  assert.ok(findNode(rateSpark, n => n.type === "Chart"));
+
+  const cpuSpark = dashboard.render({ inputs: { baseURL: "https://one.example.com", notchMetric: "cpu_spark" } }).notch.compact.trailing;
+  assert.equal(cpuSpark.type, "Row");
+  assert.ok(findNode(cpuSpark, n => n.type === "Chart"));
+});
