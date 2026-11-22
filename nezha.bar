@@ -2061,7 +2061,7 @@ function totalAlertBadgeCount() {
 function iconActionBtn({ key, svg, onClick, disabled, tooltip, active = false, busy = false }) {
   return h("Column", {
     key,
-    onClick: disabled ? undefined : onClick,
+    ...(disabled || !onClick ? {} : { onClick }),
     tooltip,
     tw: `w-7 h-7 rounded-[7px] items-center justify-center shrink-0 ${disabled ? "opacity-40" : "cursor-pointer hover:bg-surfaceHover pressed:bg-surfacePressed"} ${active ? "bg-surfaceHover" : ""}`,
   },
@@ -3123,12 +3123,12 @@ const widgetMetricColor = value => {
   return "primary";
 };
 
-function widgetHeader(title, badge, badgeColor) {
-  return h("Row", { gap: 6, alignItems: "center" },
-    h("Icon", { svg: BRAND, size: 15, color: PAL.brand }),
-    WTX(title, { fontSize: 13, fontWeight: 600, maxLines: 1 }),
+function widgetHeader(title, badge, badgeColor, compact = false) {
+  return h("Row", { gap: compact ? 5 : 6, alignItems: "center" },
+    h("Icon", { svg: BRAND, size: compact ? 14 : 15, color: PAL.brand }),
+    WTX(title, { fontSize: compact ? 12 : 13, fontWeight: 600, maxLines: 1 }),
     h("Spacer"),
-    badge ? h("Badge", { text: badge, fontSize: 10, ...(badgeColor ? { color: badgeColor } : {}) }) : null
+    badge ? h("Badge", { text: badge, fontSize: compact ? 9 : 10, ...(badgeColor ? { color: badgeColor } : {}) }) : null
   );
 }
 
@@ -3186,11 +3186,11 @@ function overviewWidget(family) {
   if (family === "small") {
     const windows = $metrix.platform === "windows";
     return h("Column", { gap: windows ? 6 : 8 },
-      widgetHeader("Nezha"),
+      widgetHeader("Nezha", statusLabel, statusColor, true),
       windows ? null : h("Spacer"),
-      widgetStat(`${summary.online}/${summary.total}`, statusLabel, statusColor, windows ? 22 : 26),
-      widgetRates(summary),
-      windows ? null : h("Spacer")
+      WTX(`${summary.online}/${summary.total}`, { fontSize: windows ? 24 : 30, fontWeight: 700, color: statusColor, maxLines: 1 }),
+      windows ? null : h("Spacer"),
+      widgetRates(summary)
     );
   }
   const heading = widgetHeader("Nezha", statusLabel, statusColor);
@@ -3291,7 +3291,7 @@ function serverWidget(family) {
   const server = resolved.server;
   const state = server.state || {};
   const online = isServerOnline(server);
-  const heading = widgetHeader(server.name || String(server.id), online ? t.online : t.offline, online ? PAL.emerald : PAL.red);
+  const heading = widgetHeader(server.name || String(server.id), online ? t.online : t.offline, online ? PAL.emerald : PAL.red, family === "small");
   const summary = summarizeScoped([server]);
   if (family === "small") {
     return h("Column", { gap: 8 }, heading, h("Spacer"),

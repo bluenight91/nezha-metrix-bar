@@ -722,7 +722,10 @@ test("overview widgets deduplicate online status and align down/up rates in the 
   const view = await renderWidget();
   const smallText = JSON.stringify(view.widget.small);
   assert.equal(smallText.split("2/2").length - 1, 1);
-  assert.equal(findNode(view.widget.small, node => node.type === "Badge"), null);
+  assert.equal(smallText.split("全部在线").length - 1, 1);
+  const smallBadge = findNode(view.widget.small, node => node.type === "Badge");
+  assert.ok(smallBadge);
+  assert.equal(smallBadge.props?.text, "全部在线");
   for (const family of ["medium", "large"]) {
     const widgetText = JSON.stringify(view.widget[family]);
     assert.equal(widgetText.split("2/2").length - 1, 1, `${family} shows online count once`);
