@@ -993,3 +993,137 @@ test("notchMetric supports stacked_rate, down, and up right-wing modes", async t
   assert.equal(up.type, "Text");
   assert.ok(up.props.text.startsWith("↑"));
 });
+
+test("server detail calls /api/v1/server/:id/service, renders network sub-tab with all lines, and supports line focus", async () => {
+  const seenPaths = [];
+  const monitors = Array.from({ length: 9 }, (_, i) => ({
+    monitor_id: i + 1,
+    monitor_name: i === 8 ? "Cloudflare" : `Line-${i + 1}`,
+    display_index: 20 - i,
+    created_at: [1760000000000, 1760000060000, 1760000120000, 1760000180000].map(t => t + (i >= 3 ? 30_000 : 0)),
+    avg_delay: i === 0 ? [290, 142, 363, 0] : [1 + i * 0.5, 2 + i * 0.5, 1.5 + i * 0.5, 1.8 + i * 0.5],
+  }));
+  const { dashboard } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    fetchImpl: async url => {
+      const u = new URL(url);
+      seenPaths.push(`${u.pathname}${u.search}`);
+      if (u.pathname === "/api/v1/service/1") {
+        return new Response(JSON.stringify({ error: "404 Not Found" }), { status: 404 });
+      }
+      if (u.pathname === "/api/v1/server/1/service") {
+        return response(monitors);
+      }
+      if (u.pathname === "/api/v1/server/1/online-history") {
+        return response({
+          currently_online: true,
+          online_rate: 99.8,
+          total_online_seconds: 86200,
+          last_active: "2026-11-22T12:00:00Z",
+          daily: [{ date: "2026-11-22", online_seconds: 43200 }],
+        });
+      }
+      if (u.pathname === "/api/v1/server/1/metrics") {
+        return response({ data_points: [{ ts: 1760000000000, value: 18 }] });
+      }
+      return response(basicPayload(u.pathname));
+    },
+  });
+  const env = { inputs: { baseURL: "https://one.example.com" } };
+  await dashboard.scheduled(env);
+
+  const card = findNode(dashboard.render(env).panel, n => n.props?.key === "srv-1");
+  card.props.onClick();
+  await new Promise(r => setImmediate(r));
+
+  assert.ok(seenPaths.some(p => p === "/api/v1/server/1/service?period=1d"), `expected /api/v1/server/1/service?period=1d, got ${seenPaths.join(", ")}`);
+  assert.ok(!seenPaths.some(p => p.startsWith("/api/v1/service/1")), "must not request broken /api/v1/service/:id path");
+
+  // Overview sub-tab shows latency teaser and hides full uptime details until switched
+  const overviewPanel = dashboard.render(env).panel;
+  assert.ok(findNode(overviewPanel, n => n.props?.key === "detail-tab-network"));
+  assert.ok(!JSON.stringify(overviewPanel).includes("99.8%"));
+
+  // Switch to Network sub-tab
+  findNode(overviewPanel, n => n.props?.key === "detail-tab-network").props.onClick();
+  const netPanel = dashboard.render(env).panel;
+  const chart = findNode(netPanel, n => n.type === "Chart");
+  assert.ok(chart, "network tab should render latency chart");
+  assert.equal(chart.props.series.length, 9, "all 9 monitors should render without an 8-line cap");
+  assert.ok(chart.props.series.every(s => typeof s.color === "string" && s.color.startsWith("#")));
+  const xs1 = [...chart.props.series[1].points].map(p => p.x);
+  const xs8 = [...chart.props.series[8].points].map(p => p.x);
+  assert.deepEqual(xs8, xs1, "staggered monitors must align onto shared x timestamps");
+  const netText = JSON.stringify(netPanel);
+  assert.ok(netText.includes("Cloudflare"));
+  assert.ok(netText.includes("25.0%") || netText.includes("25%"), "zero delay sample must count as packet loss");
+  assert.ok(netText.includes("142") && netText.includes("363"), "min/max latency range should be visible");
+
+  // Click Cloudflare row to isolate a single line on the chart
+  const cfRow = findNode(netPanel, n => n.props?.key === "mon-9");
+  assert.ok(cfRow && typeof cfRow.props.onClick === "function");
+  cfRow.props.onClick();
+  const oneSelectedPanel = dashboard.render(env).panel;
+  const oneChart = findNode(oneSelectedPanel, n => n.type === "Chart");
+  assert.equal(oneChart.props.series.length, 1);
+  assert.equal(oneChart.props.series[0].name, "Cloudflare");
+
+  // Click two more rows to multi-select and compare 3 lines on the same chart
+  findNode(oneSelectedPanel, n => n.props?.key === "mon-1").props.onClick();
+  findNode(dashboard.render(env).panel, n => n.props?.key === "mon-2").props.onClick();
+  const multiPanel = dashboard.render(env).panel;
+  const multiChart = findNode(multiPanel, n => n.type === "Chart");
+  assert.equal(multiChart.props.series.length, 3);
+  assert.deepEqual([...multiChart.props.series].map(s => s.name), ["Line-1", "Line-2", "Cloudflare"]);
+
+  // Click Line-2 again to remove it from comparison (leaving 2 lines)
+  findNode(multiPanel, n => n.props?.key === "mon-2").props.onClick();
+  const twoChart = findNode(dashboard.render(env).panel, n => n.type === "Chart");
+  assert.equal(twoChart.props.series.length, 2);
+  assert.deepEqual([...twoChart.props.series].map(s => s.name), ["Line-1", "Cloudflare"]);
+
+  // Click Show All button to restore all 9 lines
+  const clearBtn = findNode(dashboard.render(env).panel, n => n.props?.key === "clear-monitor-focus");
+  assert.ok(clearBtn && typeof clearBtn.props.onClick === "function");
+  clearBtn.props.onClick();
+  assert.equal(findNode(dashboard.render(env).panel, n => n.type === "Chart").props.series.length, 9);
+
+  // Switch to Online sub-tab
+  findNode(dashboard.render(env).panel, n => n.props?.key === "detail-tab-online").props.onClick();
+  const onlinePanel = dashboard.render(env).panel;
+  assert.ok(JSON.stringify(onlinePanel).includes("99.8%"));
+});
+
+test("server detail surfaces latency fetch errors instead of empty monitor message and supports 30d with PAT", async () => {
+  const seenPaths = [];
+  const { dashboard } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    fetchImpl: async url => {
+      const u = new URL(url);
+      seenPaths.push(`${u.pathname}${u.search}`);
+      if (u.pathname === "/api/v1/server/1/service") {
+        return new Response(JSON.stringify({ error: "service history unavailable" }), { status: 500 });
+      }
+      if (u.pathname === "/api/v1/server/1/metrics") return response({ data_points: [] });
+      if (u.pathname === "/api/v1/server/1/online-history") return response(null);
+      return response(basicPayload(u.pathname));
+    },
+  });
+  const env = { inputs: { baseURL: "https://one.example.com" } };
+  await dashboard.scheduled(env);
+  findNode(dashboard.render(env).panel, n => n.props?.key === "srv-1").props.onClick();
+  await new Promise(r => setImmediate(r));
+
+  findNode(dashboard.render(env).panel, n => n.props?.key === "detail-tab-network").props.onClick();
+  const netPanel = dashboard.render(env).panel;
+  const text = JSON.stringify(netPanel);
+  assert.ok(text.includes("service history unavailable"));
+  assert.ok(!text.includes("没有关联的 Ping/HTTP 监控") && !text.includes("No Ping/HTTP monitors attached"));
+
+  const period30d = findNode(netPanel, n => n.props?.key === "period-30d");
+  assert.ok(period30d, "PAT mode should expose 30d period option");
+  period30d.props.onClick();
+  await new Promise(r => setImmediate(r));
+  assert.ok(seenPaths.includes("/api/v1/server/1/service?period=30d"));
+  assert.ok(seenPaths.includes("/api/v1/server/1/online-history?days=30"));
+});
