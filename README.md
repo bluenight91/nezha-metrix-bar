@@ -34,7 +34,7 @@
   - 点击单机 → 详情：规格、当前状态、实时与累计流量、一键复制摘要、1 天 / 7 天指标历史曲线（CPU·内存 与 网络两张图，需 Dashboard 启用 TSDB）
   - 详情页「网络延迟」：前 8 条监控点延迟曲线 + 全量监控点网格（当前延迟、丢包率）
   - 详情页「在线情况」：在线率 / 累计在线 / 累计离线 / 最后活跃 + 每日在线时长条（`/api/v1/server/{id}/online-history`）
-- **桌面小组件** — small / medium / large 三种尺寸、完整中英本地化、四种可配置内容：全局总览（中/大尺寸含聚合带宽趋势图）、单服务器、周期流量、关注事项；单机支持 ID、唯一完整名称或跟随面板选中项，large 复用详情历史曲线
+- **桌面小组件** — small / medium / large 三种尺寸、完整中英本地化、四种可配置内容：全局总览（小尺寸居中大号在线比与对称网速、中尺寸精简 2×2 指标与累计流量、大尺寸含聚合带宽趋势图与 CPU Top 3）、单服务器、周期流量、关注事项；单机支持 ID、唯一完整名称或跟随面板选中项，large 复用详情历史曲线
   - Metrix.Bar 0.3+ 支持安装多个 Nezha 实例以同时放置不同模式的小组件或监控多套哪吒集群
 - **流量 Tab** — 周期流量提醒（来自 `/api/v1/service` 的 `cycle_transfer_stats`）：每条周期一张卡，显示已用/配额、剩余量、占比条、周期起止、下次更新；≥80% 变橙、≥95% 变红
 - **服务 Tab** — HTTP / Ping / TCP 探测列表：存活率、最新延迟、失败标红；类型过滤
@@ -82,13 +82,13 @@ https://awesome.metrix.bar/dashboards/index.json
 
 PAT 在管理前端 **设置 → API Tokens** 创建；Token 只会保存在系统凭据库（secret input），不会出现在源码或日志中。
 
-在系统小组件选择器中添加 **Metrix.Bar** 并选择 **Nezha**，即可放置桌面卡片。macOS 需要 14+ 与 Metrix.Bar 0.2.0+；Windows 11 22H2+ 和 KDE Plasma 6 的支持范围以 Metrix.Bar 文档为准。**同一实例的多张 Nezha 卡片只能显示相同内容，不能逐卡选择模式**；系统控制刷新时机，仅 Widget 保持活跃时最快每分钟更新一次。设置标签、选项和帮助文本通过 `<locale lang="zh-Hans">` 跟随 App 的简体中文界面，默认英文。静态 `<docs>` 配置说明不支持按 App 语言切换，因此采用中文在前、英文在后的完整双语说明。
+在系统小组件选择器中添加 **Metrix.Bar** 并选择 **Nezha**，即可放置桌面卡片。macOS 需要 14+ 与 Metrix.Bar 0.2.0+；Windows 11 22H2+ 和 KDE Plasma 6 的支持范围以 Metrix.Bar 文档为准。Metrix.Bar 0.3+ 支持安装多个 Nezha 实例以同时放置不同模式的小组件；系统控制刷新时机，仅 Widget 保持活跃时最快每分钟更新一次。设置标签、选项和帮助文本通过 `<locale lang="zh-Hans">` 跟随 App 的简体中文界面，默认英文；静态 `<docs>` 配置说明不支持按 App 语言切换，现统一使用简体中文。
 
 ## 开发
 
 ```sh
 git clone https://github.com/bluenight91/nezha-metrix-bar
-node --test helpers.test.mjs runtime.test.mjs   # 纯函数 + 真实 .bar 脚本运行时测试（76 个）
+node --test helpers.test.mjs runtime.test.mjs   # 纯函数 + 真实 .bar 脚本运行时测试（78 个）
 ```
 
 - `nezha.bar` — 看板本体（单文件，协议 v0）

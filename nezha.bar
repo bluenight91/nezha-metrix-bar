@@ -92,18 +92,18 @@
     </input>
   </inputs>
 
-  <docs><![CDATA[Connects to a Nezha Dashboard v1 instance (guest-accessible or PAT-authenticated).
+  <docs><![CDATA[连接哪吒监控 V2（Nezha Monitoring）面板，支持游客模式或 PAT 认证。本看板只读，不执行终端、文件管理或 MCP 写操作。
 
-Quick Setup
-1. Set Nezha Dashboard URL to your dashboard address (e.g. https://mon.example.com).
-2. If your site enables force_auth or you want Alert Rules, create a read-only Personal Access Token (nzp_…) in Nezha with nezha:inventory:read, nezha:server:read, nezha:service:read (and optionally nezha:alertrule:read), then paste it into API Token (PAT).
+快速配置
+1. 在「哪吒 Dashboard 地址」填写面板地址（如 https://mon.example.com），末尾斜杠或子路径会自动规范化。
+2. 如站点启用了 force_auth，或需要读取隐藏节点与告警规则，请在哪吒管理端「设置 → API Tokens」创建只读 PAT（nzp_…），勾选 nezha:inventory:read、nezha:server:read、nezha:service:read（可选 nezha:alertrule:read），填入「API Token（PAT）」。令牌仅保存在系统凭据库中。
 
-What's New in v2.0
-- Rich macOS Menu Bar: Choose Stacked ↑↓ Rate, Rate + Sparkline, or CPU + Sparkline in Tray Display.
-- Notch & Alert Island (Plus): Compact live telemetry on the notch wings, hover/click expanded overview, and timed alert island pop-ins.
-- Native Nezha Webhook / Email Alerts (Plus Inbox): Create a Webhook or Email Inbox in Metrix.Bar, bind it to this Nezha instance, and point Nezha's notification channel at that endpoint to receive full server rule alerts inside the Alerts tab (even alerts fired while your Mac slept).
-- Wide Window & Standalone App: Open in a wide window or Standalone App (width >= 860) for a sortable multi-column server table paired with a live side-by-side detail pane.
-- Multi-Instance Widgets: Install additional Nezha instances in Metrix.Bar 0.3+ to place multiple widgets with different modes or monitor multiple Nezha clusters simultaneously.]]></docs>
+v2.0 亮点
+- 菜单栏富渲染（macOS）：在「菜单栏显示格式」中选择双行紧凑速率、双行速率 + 迷你流量图，或集群 CPU + 迷你趋势图。
+- 刘海屏与告警动态岛（Plus）：左右侧翼显示紧凑状态，悬停/点击展开集群概览，发生离线、探针异常、流量超限或 Inbox 告警时限时高亮提醒。
+- 原生 Webhook / 邮件告警流（Plus 收件箱）：在 Metrix.Bar 创建收件箱并绑定到此实例，将哪吒通知渠道指向该地址，即可在「关注」页接收完整规则告警（含休眠期间）。
+- 宽窗口与独立 App：在宽窗口或独立 App（宽度 ≥ 860）下自动展开左侧可排序表格 + 右侧实时详情双栏视图。
+- 多尺寸桌面小组件：支持小、中、大三种尺寸与总览 / 单机 / 周期流量 / 关注四种模式；在 Metrix.Bar 0.3+ 中可安装多个实例分别绑定不同模式或集群。]]></docs>
 
   <script apis="app localStorage notification shell websocket clipboard match-media"><![CDATA[
 const h = (type, props, ...children) => ({
