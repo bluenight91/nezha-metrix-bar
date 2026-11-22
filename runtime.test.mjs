@@ -923,3 +923,32 @@ test("closed panel cache refreshes once initial server snapshot arrives and skip
   const sameRef = dashboard.render(env).panel;
   assert.equal(sameRef, afterLoad);
 });
+
+
+test("detail network chart scales raw bytes/s into human-readable MB/s with unit pill and valueLabel", async () => {
+  const { dashboard } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    fetchImpl: async url => {
+      const u = new URL(url);
+      if (u.pathname === "/api/v1/server/1/metrics") {
+        const m = u.searchParams.get("metric");
+        if (m === "net_in_speed") return response({ data_points: [{ ts: 1760000000000, value: 2_097_152 }] });
+        if (m === "net_out_speed") return response({ data_points: [{ ts: 1760000000000, value: 524_288 }] });
+        if (m === "cpu") return response({ data_points: [{ ts: 1760000000000, value: 12.34 }] });
+        return response({ data_points: [] });
+      }
+      return response(basicPayload(u.pathname));
+    },
+  });
+  const env = { inputs: { baseURL: "https://one.example.com" } };
+  await dashboard.scheduled(env);
+  const card = findNode(dashboard.render(env).panel, n => n.props?.key === "srv-1");
+  card.props.onClick();
+  await new Promise(r => setImmediate(r));
+  const detail = dashboard.render(env).panel;
+  const text = JSON.stringify(detail);
+  assert.ok(text.includes('"MB/s"'));
+  assert.ok(text.includes('"2.0M/s"'));
+  assert.ok(!text.includes("2097152"));
+  assert.ok(text.includes('"12.3%"'));
+});

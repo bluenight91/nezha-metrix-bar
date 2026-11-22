@@ -161,6 +161,14 @@ export function formatRate(bytesPerSec, compact = false) {
   return `${v.toFixed(digits)}${units[i]}`;
 }
 
+export function pickRateScale(maxBytesPerSec) {
+  const peak = Math.max(0, Number(maxBytesPerSec) || 0);
+  if (peak >= 1024 ** 3) return { divisor: 1024 ** 3, unit: "GB/s" };
+  if (peak >= 1024 ** 2) return { divisor: 1024 ** 2, unit: "MB/s" };
+  if (peak >= 1024) return { divisor: 1024, unit: "KB/s" };
+  return { divisor: 1, unit: "B/s" };
+}
+
 export function formatBytes(bytes, digits = 1, compact = false) {
   const n = Number(bytes) || 0;
   const abs = Math.abs(n);

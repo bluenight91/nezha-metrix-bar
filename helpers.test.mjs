@@ -10,6 +10,7 @@ import {
   scopedServers,
   summarizeScoped,
   formatRate,
+  pickRateScale,
   formatBytes,
   mergeServiceRows,
   buildAttention,
@@ -555,4 +556,13 @@ test("trackInboxArrival suppresses first-load noise and tracks read/unread state
   assert.equal(isInboxUnread(boxes, "box1", 12), false);
   assert.equal(setInboxRead(boxes, "box1", 10, false), true);
   assert.equal(isInboxUnread(boxes, "box1", 10), true);
+});
+
+
+test("pickRateScale chooses human-friendly rate units for chart Y axes", () => {
+  assert.deepEqual(pickRateScale(0), { divisor: 1, unit: "B/s" });
+  assert.deepEqual(pickRateScale(500), { divisor: 1, unit: "B/s" });
+  assert.deepEqual(pickRateScale(800 * 1024), { divisor: 1024, unit: "KB/s" });
+  assert.deepEqual(pickRateScale(2_000_000), { divisor: 1024 ** 2, unit: "MB/s" });
+  assert.deepEqual(pickRateScale(2 * 1024 ** 3), { divisor: 1024 ** 3, unit: "GB/s" });
 });

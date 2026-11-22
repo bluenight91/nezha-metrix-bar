@@ -318,6 +318,14 @@ function formatRate(bytesPerSec, compact = false) {
   return `${v.toFixed(digits)}${units[i]}`;
 }
 
+function pickRateScale(maxBytesPerSec) {
+  const peak = Math.max(0, Number(maxBytesPerSec) || 0);
+  if (peak >= 1024 ** 3) return { divisor: 1024 ** 3, unit: "GB/s" };
+  if (peak >= 1024 ** 2) return { divisor: 1024 ** 2, unit: "MB/s" };
+  if (peak >= 1024) return { divisor: 1024, unit: "KB/s" };
+  return { divisor: 1, unit: "B/s" };
+}
+
 function formatBytes(bytes, digits = 1, compact = false) {
   const n = Number(bytes) || 0;
   const abs = Math.abs(n);
@@ -2019,13 +2027,19 @@ function loadMetrics(serverId, period = detailPeriod) {
   return promise;
 }
 
-function chartFromPoints(pts, name, color) {
+function chartFromPoints(pts, name, color, { divisor = 1, formatValue } = {}) {
   if (!Array.isArray(pts) || !pts.length) return null;
   const tail = pts.slice(-120);
   return {
     name,
     color,
-    points: tail.map(p => ({ x: Number(p.ts) || 0, y: Number(p.value) || 0 })),
+    points: tail.map(p => {
+      const raw = Number(p.value) || 0;
+      const y = divisor > 1 ? Number((raw / divisor).toFixed(2)) : Number(raw.toFixed(2));
+      const pt = { x: Number(p.ts) || 0, y };
+      if (typeof formatValue === "function") pt.valueLabel = formatValue(raw);
+      return pt;
+    }),
   };
 }
 
@@ -2493,10 +2507,11 @@ function panelShell(header, body, { width = 520, height, isWide = false } = {}) 
   );
 }
 
-function metricChartCard(title, legendItems, charts, type, height = 140) {
+function metricChartCard(title, legendItems, charts, type, height = 140, unit = "") {
   return h("Column", { tw: `gap-2 py-3 px-3.5 rounded-xl bg-background border border-${cardBorder()} w-full` },
     h("Row", { tw: "items-center gap-2 w-full" },
       TX(title, { tw: "text-[11.5px] font-semibold text-textMuted" }),
+      unit ? TX(unit, { tw: "text-[9.5px] font-medium text-textMuted px-1.5 py-0.5 rounded bg-surfaceHover tabular-nums" }) : null,
       h("Spacer"),
       ...legendItems.map((lg, i) => h("Row", { key: `lg-${i}`, tw: "items-center gap-1" },
         statusDot(lg.color, 6),
@@ -2509,6 +2524,7 @@ function metricChartCard(title, legendItems, charts, type, height = 140) {
       xKind: "time",
       curve: "monotone",
       grid: true,
+      hover: true,
       legend: false,
       series: charts,
     })
@@ -2539,11 +2555,14 @@ function serverDetailBody(s) {
   const key = `${s.id}:${detailPeriod}`;
   const cache = metricsCache.get(key) || {};
   const series = cache.series || {};
-  const cpu = chartFromPoints(series.cpu, "CPU %", PAL.blue);
+  const cpu = chartFromPoints(series.cpu, "CPU", PAL.blue, { formatValue: v => `${v.toFixed(1)}%` });
   const memPts = (series.memory || []).map(p => ({ ts: p.ts, value: host.mem_total ? (Number(p.value) / host.mem_total) * 100 : Number(p.value) }));
-  const mem = chartFromPoints(memPts, "Mem %", PAL.indigo);
-  const netIn = chartFromPoints(series.net_in_speed, "↓ B/s", PAL.sky);
-  const netOut = chartFromPoints(series.net_out_speed, "↑ B/s", PAL.emerald);
+  const mem = chartFromPoints(memPts, t.mem, PAL.indigo, { formatValue: v => `${v.toFixed(1)}%` });
+  const rawNetPts = [...(series.net_in_speed || []), ...(series.net_out_speed || [])];
+  const peakNet = rawNetPts.reduce((m, p) => Math.max(m, Number(p?.value) || 0), 0);
+  const netScale = pickRateScale(peakNet);
+  const netIn = chartFromPoints(series.net_in_speed, `↓ ${t.downRate}`, PAL.sky, { divisor: netScale.divisor, formatValue: v => formatRate(v) });
+  const netOut = chartFromPoints(series.net_out_speed, `↑ ${t.upRate}`, PAL.emerald, { divisor: netScale.divisor, formatValue: v => formatRate(v) });
   const resourceCharts = [cpu, mem].filter(Boolean);
   const networkCharts = [netIn, netOut].filter(Boolean);
   const memPct = pct(st.mem_used, host.mem_total);
@@ -2552,7 +2571,14 @@ function serverDetailBody(s) {
   const latencyCharts = monitorRows
     .filter(r => r.points.length)
     .slice(0, 8)
-    .map(r => ({ name: r.name, points: r.points.slice(-120).map(p => ({ x: p.ts, y: p.value })) }));
+    .map(r => ({
+      name: r.name,
+      points: r.points.slice(-120).map(p => ({
+        x: p.ts,
+        y: Number(Number(p.value).toFixed(1)),
+        valueLabel: `${Number(p.value).toFixed(1)} ms`,
+      })),
+    }));
   const days = detailPeriod === "7d" ? 7 : 1;
   const online = cache.online ? buildOnlineSummary(cache.online, days * 86400) : null;
   const on = isServerOnline(s);
@@ -2670,12 +2696,12 @@ function serverDetailBody(s) {
         TX(cache.error, { tw: "text-[11.5px] text-[#ef4444] grow min-w-0" }),
         h("Button", { text: t.retry, onClick: () => { void loadMetrics(s.id); }, tw: "text-[10px]" })
       ) : null,
-      resourceCharts.length ? metricChartCard(t.resourceChart, [{ label: "CPU", color: PAL.blue }, { label: "MEM", color: PAL.indigo }], resourceCharts, "area", 140) : null,
-      networkCharts.length ? metricChartCard(t.networkChart, [{ label: t.downRate, color: PAL.sky }, { label: t.upRate, color: PAL.emerald }], networkCharts, "line", 140) : null,
+      resourceCharts.length ? metricChartCard(t.resourceChart, [{ label: "CPU", color: PAL.blue }, { label: "MEM", color: PAL.indigo }], resourceCharts, "area", 140, "%") : null,
+      networkCharts.length ? metricChartCard(t.networkChart, [{ label: t.downRate, color: PAL.sky }, { label: t.upRate, color: PAL.emerald }], networkCharts, "line", 140, netScale.unit) : null,
       monitorRows.length
         ? h("Column", { tw: "gap-2 w-full" },
             latencyCharts.length
-              ? metricChartCard(t.latency, [], latencyCharts, "line", 136)
+              ? metricChartCard(t.latency, [], latencyCharts, "line", 136, "ms")
               : TX(t.latency, { tw: "text-[11px] font-semibold text-textMuted px-1" }),
             ...monitorGrid
           )
@@ -3226,8 +3252,8 @@ function widgetDiskRow(server) {
   );
 }
 
-function widgetChartSeries(points, color) {
-  return { color, points: (points || []).slice(-120).map(point => ({ y: Number(point.value) || 0 })) };
+function widgetChartSeries(points, color, divisor = 1) {
+  return { color, points: (points || []).slice(-120).map(point => ({ y: Number(((Number(point.value) || 0) / divisor).toFixed(2)) })) };
 }
 
 function serverWidget(family) {
@@ -3258,15 +3284,19 @@ function serverWidget(family) {
   const chartCells = [];
   if (family === "large" && caps.widgetChart) {
     if (series.cpu && series.cpu.length) {
+      const memTotal = Number(server.host?.mem_total) || 0;
+      const memPts = (series.memory || []).map(p => ({ value: memTotal > 0 ? (Number(p.value) / memTotal) * 100 : Number(p.value) }));
       chartCells.push(h("Column", { gap: 3 },
-        WTX(`CPU / ${t.mem}`, { fontSize: 10, color: "secondary" }),
-        h("Chart", { type: "area", height: 64, series: [widgetChartSeries(series.cpu, "accent"), widgetChartSeries(series.memory, "warning")] })
+        WTX(`CPU / ${t.mem} (%)`, { fontSize: 10, color: "secondary" }),
+        h("Chart", { type: "area", height: 64, series: [widgetChartSeries(series.cpu, "#3b82f6"), widgetChartSeries(memPts, "#6366f1")] })
       ));
     }
     if (series.net_in_speed && series.net_in_speed.length) {
+      const wPeak = [...(series.net_in_speed || []), ...(series.net_out_speed || [])].reduce((m, p) => Math.max(m, Number(p?.value) || 0), 0);
+      const wScale = pickRateScale(wPeak);
       chartCells.push(h("Column", { gap: 3 },
-        WTX(t.networkChart, { fontSize: 10, color: "secondary" }),
-        h("Chart", { type: "area", height: 64, series: [widgetChartSeries(series.net_in_speed, "accent"), widgetChartSeries(series.net_out_speed, "success")] })
+        WTX(`${t.networkChart} (${wScale.unit})`, { fontSize: 10, color: "secondary" }),
+        h("Chart", { type: "area", height: 64, series: [widgetChartSeries(series.net_in_speed, "#0ea5e9", wScale.divisor), widgetChartSeries(series.net_out_speed, "#10b981", wScale.divisor)] })
       ));
     }
   }
