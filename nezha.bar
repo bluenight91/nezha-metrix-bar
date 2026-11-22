@@ -2174,18 +2174,18 @@ function kpiSparkTile({ key, label, value, valueColor = "text", tintHex = PAL.bl
     "Column",
     {
       key,
-      tw: `justify-between gap-1.5 py-2.5 px-2.5 rounded-xl border border-${cardBorder()} bg-background grow basis-0 min-w-0`,
+      tw: `justify-between gap-1 py-2 px-2.5 rounded-xl border border-${cardBorder()} bg-background grow basis-0 min-w-0`,
       linearGradient: { from: `${tintHex}12`, to: "background", angle: 135 },
     },
-    TX(label, { tw: "text-[10px] font-medium text-textMuted leading-none truncate" }),
-    TX(value, { tw: `text-[15.5px] font-bold leading-none tabular-nums truncate ${valTw}`, contentTransition: { numeric: true } }),
+    TX(label, { tw: "text-[9.5px] font-medium text-textMuted leading-none truncate" }),
+    TX(value, { tw: `text-[14.5px] font-bold leading-none tabular-nums truncate ${valTw}` }),
     progressPct != null
-      ? capsuleBar(progressPct, progressHex || PAL.emerald, "h-[3.5px]")
+      ? capsuleBar(progressPct, progressHex || PAL.emerald, "h-[3px]")
       : pts.length > 1
         ? h("Chart", {
             type: "area",
-            height: 20,
-            tw: "w-full h-[20px]",
+            height: 16,
+            tw: "w-full h-[16px]",
             curve: "monotone",
             grid: false,
             legend: false,
@@ -2194,7 +2194,7 @@ function kpiSparkTile({ key, label, value, valueColor = "text", tintHex = PAL.bl
             strokeWidth: 1.4,
             series: [{ name: sparkKey, color: sparkColor || PAL.sky, points: pts }],
           })
-        : h("Box", { tw: "h-[3.5px] w-full rounded-full bg-surfaceHover" })
+        : h("Box", { tw: "h-[3px] w-full rounded-full bg-surfaceHover" })
   );
 }
 
@@ -2280,20 +2280,22 @@ function serversToolbar(isTableMode = false) {
       value: groupValue,
       onChange: selectGroup,
     }) : null,
-    servers.size > 6 ? h("SearchField", {
-      key: "server-search",
-      value: serverQuery,
-      placeholder: t.searchPlaceholder,
-      onChange: v => { serverQuery = String(v || ""); $metrix.invalidate(); },
-    }) : null,
-    h("Row", { tw: "gap-2 items-center w-full" },
+    h("Row", { tw: "gap-2 items-center w-full min-w-0" },
+      servers.size > 6 ? h("Box", { tw: "grow min-w-0" },
+        h("SearchField", {
+          key: "server-search",
+          value: serverQuery,
+          placeholder: t.searchPlaceholder,
+          onChange: v => { serverQuery = String(v || ""); $metrix.invalidate(); },
+        })
+      ) : null,
       CompactToggle(
         [{ label: t.all, value: "all" }, { label: `${t.starred}${watchlist.size ? ` ${watchlist.size}` : ""}`, value: "starred" }],
         watchMode,
         v => { watchMode = String(v || "all"); localStorage.setItem("nezha.watchMode", watchMode); $metrix.invalidate(); },
         "watch"
       ),
-      h("Spacer"),
+      servers.size <= 6 ? h("Spacer") : null,
       !isTableMode ? CompactToggle(
         [{ label: t.sortCpu, value: "cpu" }, { label: t.sortNet, value: "net" }, { label: t.sortName, value: "name" }],
         ["cpu", "net", "name"].includes(sortBy) ? sortBy : "cpu",
@@ -2338,7 +2340,7 @@ function serverCard(s, isSelected = false) {
     "Column",
     {
       key: `srv-${id}`,
-      tw: `gap-2.5 p-3 rounded-xl bg-background border ${borderCls} grow basis-0 min-w-0 cursor-pointer hover:bg-surfaceHover pressed:bg-surfacePressed`,
+      tw: `gap-1.5 py-2 px-2.5 rounded-xl bg-background border ${borderCls} grow basis-0 min-w-0 cursor-pointer hover:bg-surfaceHover pressed:bg-surfacePressed`,
       onClick: () => {
         selectedServerId = id;
         void loadMetrics(id);
@@ -2457,7 +2459,7 @@ function serverGrid(list, selectedId) {
   return chunk(list, 2).map((row, i) => {
     const cells = row.map(s => serverCard(s, String(selectedId || "") === String(s.id)));
     if (row.length === 1) cells.push(h("Box", { key: `ph-${i}`, tw: "grow basis-0 min-w-0" }));
-    return h("Row", { key: `row-${i}`, tw: "gap-2.5 w-full items-start" }, ...cells);
+    return h("Row", { key: `row-${i}`, tw: "gap-2 w-full items-start" }, ...cells);
   });
 }
 
@@ -2481,12 +2483,12 @@ function panelShell(header, body, { width = 520, height, isWide = false } = {}) 
   return h(
     "Column",
     rootProps,
-    h("Column", { tw: "gap-2.5 px-4 pt-3 pb-2.5 w-full" }, ...header),
+    h("Column", { tw: "gap-2 px-3.5 pt-2.5 pb-2 w-full" }, ...header),
     Line(),
     h(
       "Scroll",
-      { grow: 1, minHeight: 0, fillWidth: true, tw: "px-4 py-3" },
-      h("Column", { tw: "gap-2.5 w-full" }, ...statusBody)
+      { grow: 1, minHeight: 0, fillWidth: true, tw: "px-3.5 py-2.5" },
+      h("Column", { tw: "gap-2 w-full" }, ...statusBody)
     )
   );
 }
@@ -2762,7 +2764,7 @@ function serversPanel(viewportWidth = 0) {
     ? (effectiveView === "table" ? serverTable(list, selectedServerId, true) : serverGrid(list, selectedServerId))
     : [TX(t.emptyServers, { tw: "text-[12px] text-textMuted" })];
   const fourRowHeight = list.length > 6
-    ? 664 + (groups.length > 0 ? 40 : 0) + (servers.size > 6 ? 40 : 0) + (wsDegraded ? 22 : 0) + (error && loadedAt ? 42 : 0)
+    ? Math.min(638, 588 + (groups.length > 0 ? 38 : 0) + (wsDegraded ? 12 : 0))
     : undefined;
   return panelShell(
     [brandHeader(false), topTabs(), overviewCard(), serversToolbar(effectiveView === "table")],

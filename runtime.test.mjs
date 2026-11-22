@@ -482,7 +482,7 @@ test("panel uses 4-row flyout height above 6 servers, adaptive height at or belo
   const flyoutEnv = { inputs: { baseURL: "https://one.example.com" } };
   await dashboard.scheduled(flyoutEnv);
   const flyoutPanel = dashboard.render(flyoutEnv).panel;
-  assert.equal(flyoutPanel.props.preferredHeight, 744);
+  assert.equal(flyoutPanel.props.preferredHeight, 626);
   assert.equal(flyoutPanel.props.preferredWidth, 520);
   assert.ok(!JSON.stringify(flyoutPanel).includes("e-10"));
 
