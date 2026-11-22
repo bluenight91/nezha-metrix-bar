@@ -2287,7 +2287,7 @@ function tableHeaderCell(label, colKey, widthCls, alignEnd = true) {
 
 function serverTable(list, selectedId, compact = false) {
   const t = T();
-  const header = h("Row", { tw: "items-center gap-2 px-3 py-2 border-b border-border w-full bg-background" },
+  const header = h("Row", { tw: "items-center gap-2 px-3 py-2 w-full bg-background" },
     tableHeaderCell(t.colNode, "name", "grow min-w-0", false),
     tableHeaderCell(t.sortCpu, "cpu", "w-[40px] shrink-0", true),
     tableHeaderCell(t.sortMem, "mem", "w-[40px] shrink-0", true),
@@ -2296,7 +2296,8 @@ function serverTable(list, selectedId, compact = false) {
     tableHeaderCell(t.sortUp, "up", "w-[58px] shrink-0", true),
     !compact ? tableHeaderCell(t.sortLoad, "load", "w-[42px] shrink-0", true) : null
   );
-  const rows = list.map((s, idx) => {
+  const rows = [];
+  list.forEach((s, idx) => {
     const st = s.state || {};
     const host = s.host || {};
     const on = isServerOnline(s);
@@ -2306,9 +2307,10 @@ function serverTable(list, selectedId, compact = false) {
     const cpuPct = Math.max(0, Math.min(100, Number(st.cpu) || 0));
     const memPct = pct(st.mem_used, host.mem_total);
     const diskPct = pct(st.disk_used, host.disk_total);
-    return h("Row", {
+    if (idx > 0) rows.push(h("Box", { key: `sep-${id}`, tw: "h-[1px] w-full bg-border" }));
+    rows.push(h("Row", {
       key: `srv-${id}`,
-      tw: `items-center gap-2 px-3 h-[32px] w-full cursor-pointer ${idx < list.length - 1 ? "border-b border-border" : ""} ${selected ? "bg-background" : ""}`,
+      tw: `items-center gap-2 px-3 h-[32px] w-full cursor-pointer ${selected ? "bg-background" : ""}`,
       hover: { background: "border" },
       onClick: () => {
         selectedServerId = id;
@@ -2337,9 +2339,9 @@ function serverTable(list, selectedId, compact = false) {
       TX(on ? formatRate(st.net_in_speed, true) : "—", { tw: "w-[58px] shrink-0 text-right text-[10.5px] tabular-nums text-textMuted" }),
       TX(on ? formatRate(st.net_out_speed, true) : "—", { tw: "w-[58px] shrink-0 text-right text-[10.5px] tabular-nums text-textMuted" }),
       !compact ? TX(on ? Number(st.load_1 || 0).toFixed(2) : t.offline, { tw: `w-[42px] shrink-0 text-right text-[10.5px] tabular-nums text-${on ? "textMuted" : "danger"}` }) : null
-    );
+    ));
   });
-  return [h("Column", { key: "server-table", tw: "rounded-xl bg-surface border border-border overflow-hidden w-full" }, header, ...rows)];
+  return [h("Column", { key: "server-table", tw: "rounded-xl bg-surface border border-border overflow-hidden w-full" }, header, h("Box", { tw: "h-[1px] w-full bg-border" }), ...rows)];
 }
 
 function chunk(list, size) {
@@ -2721,7 +2723,7 @@ function cycleCard(c) {
       TX(`${c.pct.toFixed(1)}%`, { tw: `text-[11px] font-bold tabular-nums shrink-0 text-${color}` })
     ),
     TX(c.cycle, { tw: "text-[9.5px] font-semibold text-accent truncate" }),
-    h("Row", { tw: "items-baseline gap-1.5 w-full" },
+    h("Row", { tw: "items-end gap-1.5 w-full" },
       TX(`${formatBytes(c.used, 1, true)} / ${formatBytes(c.max, 1, true)}`, { tw: "text-[11.5px] font-semibold tabular-nums" }),
       h("Spacer"),
       TX(`${t.remaining} ${formatBytes(c.remaining, 1, true)}`, { tw: "text-[9.5px] tabular-nums text-textMuted" })
@@ -2824,7 +2826,8 @@ function inboxAlertCard(alert) {
       age ? TX(age, { tw: "text-[9.5px] text-textMuted tabular-nums shrink-0" }) : null
     ),
     alert.body && !expanded ? TX(alert.body, { tw: "text-[10.5px] text-textMuted line-clamp-2" }) : null,
-    expanded ? h("Column", { tw: "gap-2 pt-1.5 border-t border-border w-full" },
+    expanded ? h("Column", { tw: "gap-2 pt-1.5 w-full" },
+      h("Box", { tw: "h-[1px] w-full bg-border" }),
       inboxLoadingKey === alert.key
         ? h("Row", { tw: "items-center gap-1.5" }, h("Spinner", { tw: "size-[11px]" }), TX(t.loading, { tw: "text-[10.5px] text-textMuted" }))
         : TX(alert.body || alert.title, { selectable: true, tw: "text-[11px] leading-relaxed" }),
