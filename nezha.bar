@@ -3165,8 +3165,9 @@ function formatWidgetRate(bytesPerSecond) {
 }
 
 function widgetRates(summary) {
-  return h("Row", { gap: 8 },
+  return h("Row", { gap: 6, alignItems: "center" },
     WTX(`↓${formatWidgetRate(summary.netDown)}`, { fontSize: 11, fontWeight: 600, maxLines: 1 }),
+    h("Spacer"),
     WTX(`↑${formatWidgetRate(summary.netUp)}`, { fontSize: 11, fontWeight: 600, maxLines: 1 })
   );
 }
@@ -3188,7 +3189,11 @@ function overviewWidget(family) {
     return h("Column", { gap: windows ? 6 : 8 },
       widgetHeader("Nezha", statusLabel, statusColor, true),
       windows ? null : h("Spacer"),
-      WTX(`${summary.online}/${summary.total}`, { fontSize: windows ? 24 : 30, fontWeight: 700, color: statusColor, maxLines: 1 }),
+      h("Row", { alignItems: "center" },
+        h("Spacer"),
+        WTX(`${summary.online}/${summary.total}`, { fontSize: windows ? 24 : 30, fontWeight: 700, color: statusColor, maxLines: 1, textAlign: "center" }),
+        h("Spacer")
+      ),
       windows ? null : h("Spacer"),
       widgetRates(summary)
     );
