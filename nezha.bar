@@ -1751,11 +1751,14 @@ async function refreshInbox(changedIds = null) {
       const arrived = trackInboxArrival(inboxStore.boxes, box.id, list);
       saveInboxStore();
       const arrivedSeqs = new Set(arrived.map(m => Number(m.seq)));
+      let hydratedWebhooks = 0;
       for (const entry of list) {
         const key = `${entry.inbox_id}:${entry.seq}`;
         let payload = inboxBodies.get(key) ?? null;
-        if (arrivedSeqs.has(Number(entry.seq)) && payload == null) {
+        const needsHydrate = payload == null && (arrivedSeqs.has(Number(entry.seq)) || (entry.source === "webhook" && !entry.subject && hydratedWebhooks < 5));
+        if (needsHydrate) {
           payload = await fetchInboxPayload(entry);
+          if (entry.source === "webhook") hydratedWebhooks += 1;
         }
         const parsed = parseInboxAlert(entry, payload);
         if (!parsed.body && prevByKey.has(key)) {
@@ -2067,7 +2070,7 @@ function iconActionBtn({ key, svg, onClick, disabled, tooltip, active = false, b
   return h("Column", {
     key,
     ...(disabled || !onClick ? {} : { onClick }),
-    tooltip,
+    ...(tooltip ? { tooltip } : {}),
     tw: `w-7 h-7 rounded-[7px] items-center justify-center shrink-0 ${disabled ? "opacity-40" : "cursor-pointer hover:bg-surfaceHover pressed:bg-surfacePressed"} ${active ? "bg-surfaceHover" : ""}`,
   },
     h("Icon", {
