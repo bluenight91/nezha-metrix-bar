@@ -718,13 +718,26 @@ test("changing widget inputs explicitly invalidates the published view", async (
 });
 
 
-test("medium overview combines transfer and online status into one footer row", async () => {
+test("overview widgets deduplicate online status and align down/up rates in the right column", async () => {
   const view = await renderWidget();
+  const smallText = JSON.stringify(view.widget.small);
+  assert.equal(smallText.split("2/2").length - 1, 1);
+  assert.equal(findNode(view.widget.small, node => node.type === "Badge"), null);
+  for (const family of ["medium", "large"]) {
+    const widgetText = JSON.stringify(view.widget[family]);
+    assert.equal(widgetText.split("2/2").length - 1, 1, `${family} shows online count once`);
+    assert.equal(widgetText.split("全部在线").length - 1, 1, `${family} shows status badge once`);
+    const stats = findNode(view.widget[family], node => node.props?.key === "widget-overview-stats");
+    assert.ok(stats);
+    assert.equal(stats.children.length, 4);
+    assert.ok(JSON.stringify(stats.children[1]).includes("↓"));
+    assert.ok(JSON.stringify(stats.children[3]).includes("↑"));
+  }
   const footer = findNode(view.widget.medium, node => node.props?.key === "widget-overview-footer");
   assert.ok(footer);
   assert.equal(footer.type, "Row");
-  assert.ok(JSON.stringify(footer).includes("全部在线"));
   assert.ok(JSON.stringify(footer).includes("累计"));
+  assert.ok(JSON.stringify(footer).includes("关注"));
 });
 
 

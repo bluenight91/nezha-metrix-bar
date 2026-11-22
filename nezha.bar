@@ -3116,13 +3116,19 @@ function panelTree(env) {
 
 const WTX = (text, props) => h("Text", { text: String(text), ...(props || {}) });
 const widgetColor = value => value === "danger" ? "error" : value;
+const widgetMetricColor = value => {
+  const n = Number(value) || 0;
+  if (n >= 90) return PAL.red;
+  if (n >= 80) return PAL.amber;
+  return "primary";
+};
 
-function widgetHeader(title, badge) {
+function widgetHeader(title, badge, badgeColor) {
   return h("Row", { gap: 6, alignItems: "center" },
-    h("Icon", { svg: BRAND, size: 15, color: "accent" }),
+    h("Icon", { svg: BRAND, size: 15, color: PAL.brand }),
     WTX(title, { fontSize: 13, fontWeight: 600, maxLines: 1 }),
     h("Spacer"),
-    badge ? h("Badge", { text: badge, fontSize: 10 }) : null
+    badge ? h("Badge", { text: badge, fontSize: 10, ...(badgeColor ? { color: badgeColor } : {}) }) : null
   );
 }
 
@@ -3143,7 +3149,7 @@ function widgetStat(value, label, color, size = 20) {
 }
 
 function widgetProgress(value, color) {
-  return h("Progress", { value: Math.max(0, Math.min(100, Number(value) || 0)) / 100, color: widgetColor(color || "accent") });
+  return h("Progress", { value: Math.max(0, Math.min(100, Number(value) || 0)) / 100, color: widgetColor(color || PAL.blue) });
 }
 
 function formatWidgetRate(bytesPerSecond) {
@@ -3165,9 +3171,9 @@ function widgetRates(summary) {
   );
 }
 
-function widgetTransfer(summary) {
+function widgetTransfer(summary, fontSize = 10) {
   return WTX(`${T().transfer} ↓${formatBytes(summary.transferDown, 1, true)}  ↑${formatBytes(summary.transferUp, 1, true)}`, {
-    fontSize: 11, color: "secondary", maxLines: 1,
+    fontSize, color: "secondary", maxLines: 1,
   });
 }
 
@@ -3175,56 +3181,70 @@ function overviewWidget(family) {
   const t = T();
   const summary = summarizeScoped(Array.from(servers.values()));
   const attention = buildAttention({ servers: Array.from(servers.values()), services: serviceRows, alertRules, cycleTransfers }).items;
-  const heading = widgetHeader("Nezha", `${summary.online}/${summary.total}`);
-  const statusText = WTX(summary.offline ? t.offlineCount(summary.offline) : t.allOnline, {
-    fontSize: 10, color: summary.offline ? "warning" : "secondary", maxLines: 1,
-  });
+  const statusLabel = summary.offline ? t.offlineCount(summary.offline) : t.allOnline;
+  const statusColor = summary.offline ? PAL.amber : PAL.emerald;
   if (family === "small") {
     const windows = $metrix.platform === "windows";
-    return h("Column", { gap: windows ? 6 : 8 }, heading, windows ? null : h("Spacer"),
-      widgetStat(`${summary.online}/${summary.total}`, t.online, summary.offline ? "warning" : "success", windows ? 24 : 28),
-      widgetRates(summary), statusText,
+    return h("Column", { gap: windows ? 6 : 8 },
+      widgetHeader("Nezha"),
+      windows ? null : h("Spacer"),
+      widgetStat(`${summary.online}/${summary.total}`, statusLabel, statusColor, windows ? 24 : 28),
+      widgetRates(summary),
       windows ? null : h("Spacer")
     );
   }
-  const stats = h("Grid", { key: "widget-overview-stats", columns: 2, gap: 10 },
-    widgetStat(`${summary.online}/${summary.total}`, t.online, summary.offline ? "warning" : "success"),
+  const heading = widgetHeader("Nezha", statusLabel, statusColor);
+  // Left column: cluster status & CPU; Right column: down & up rates aligned vertically
+  const stats = h("Grid", { key: "widget-overview-stats", columns: 2, gap: family === "medium" ? 8 : 10 },
+    widgetStat(`${summary.online}/${summary.total}`, t.online, statusColor),
     widgetStat(`↓${formatWidgetRate(summary.netDown)}`, t.downRate),
-    widgetStat(`↑${formatWidgetRate(summary.netUp)}`, t.upRate),
-    widgetStat(`${summary.avgCpu.toFixed(0)}%`, "Avg CPU", "accent")
+    widgetStat(`${summary.avgCpu.toFixed(0)}%`, t.avgCpu, widgetMetricColor(summary.avgCpu)),
+    widgetStat(`↑${formatWidgetRate(summary.netUp)}`, t.upRate)
   );
   const sparkRate = caps.widgetChart && fleetHistory.length > 1
     ? h("Chart", {
         key: "widget-overview-chart",
         type: "area",
-        height: family === "medium" ? 34 : 52,
+        height: family === "medium" ? 26 : 54,
         series: [
-          { color: "accent", points: buildSparkPoints(fleetHistory, "down", 40) },
-          { color: "success", points: buildSparkPoints(fleetHistory, "up", 40) },
+          { color: PAL.sky, points: buildSparkPoints(fleetHistory, "down", 40) },
+          { color: PAL.emerald, points: buildSparkPoints(fleetHistory, "up", 40) },
         ],
       })
     : null;
   if (family === "medium") {
-    return h("Column", { gap: 8 }, heading, stats,
+    return h("Column", { gap: 7 }, heading, stats,
       sparkRate,
-      h("Row", { key: "widget-overview-footer", gap: 8 }, widgetTransfer(summary), h("Spacer"), statusText)
+      h("Row", { key: "widget-overview-footer", gap: 8, alignItems: "center" },
+        widgetTransfer(summary, 10),
+        h("Spacer"),
+        WTX(t.attentionCount(attention.length), { fontSize: 10, color: attention.length ? PAL.amber : "secondary", maxLines: 1 })
+      )
     );
   }
   const topCpu = Array.from(servers.values())
     .filter(server => isServerOnline(server))
     .sort((a, b) => Number(b.state?.cpu || 0) - Number(a.state?.cpu || 0))
     .slice(0, 3);
-  return h("Column", { gap: 9 }, heading, stats, sparkRate, widgetTransfer(summary), statusText,
+  return h("Column", { gap: 8 },
+    heading,
+    stats,
+    h("Row", { key: "widget-overview-band", gap: 8, alignItems: "center" },
+      sparkRate ? WTX(t.networkChart, { fontSize: 10, fontWeight: 600, color: "secondary", maxLines: 1 }) : null,
+      sparkRate ? h("Spacer") : null,
+      widgetTransfer(summary, 10)
+    ),
+    sparkRate,
     h("Divider"),
     h("Row", { gap: 8 },
       WTX(t.topCpu, { fontSize: 11, fontWeight: 600, color: "secondary" }),
       h("Spacer"),
-      WTX(t.attentionCount(attention.length), { fontSize: 11, color: attention.length ? "warning" : "secondary" })
+      WTX(t.attentionCount(attention.length), { fontSize: 11, color: attention.length ? PAL.amber : "secondary" })
     ),
     topCpu.length ? topCpu.map(server => h("Row", { key: `widget-cpu-${server.id}`, gap: 8, alignItems: "center" },
       WTX(server.name || server.id, { fontSize: 11, maxLines: 1 }),
       h("Spacer"),
-      WTX(`${Number(server.state?.cpu || 0).toFixed(0)}%`, { fontSize: 11, fontWeight: 600, color: widgetColor(resourceColor(server.state?.cpu)) })
+      WTX(`${Number(server.state?.cpu || 0).toFixed(0)}%`, { fontSize: 11, fontWeight: 600, color: widgetMetricColor(server.state?.cpu) })
     )) : WTX(t.noOnlineNodes, { fontSize: 11, color: "secondary" })
   );
 }
@@ -3233,13 +3253,13 @@ function widgetCompactResources(server) {
   const state = server.state || {};
   const host = server.host || {};
   const resources = [
-    ["MEM", pct(state.mem_used, host.mem_total)],
-    ["DISK", pct(state.disk_used, host.disk_total)],
+    ["MEM", pct(state.mem_used, host.mem_total), PAL.sky],
+    ["DISK", pct(state.disk_used, host.disk_total), PAL.slate],
   ];
-  return h("Grid", { key: "widget-server-compact-resources", columns: 2, gap: 8 }, resources.map(([label, value]) =>
+  return h("Grid", { key: "widget-server-compact-resources", columns: 2, gap: 8 }, resources.map(([label, value, normalHex]) =>
     h("Column", { gap: 3 },
-      WTX(`${label} ${value.toFixed(0)}%`, { fontSize: 10, fontWeight: 600, color: widgetColor(resourceColor(value)), maxLines: 1 }),
-      widgetProgress(value, resourceColor(value))
+      WTX(`${label} ${value.toFixed(0)}%`, { fontSize: 10, fontWeight: 600, color: widgetMetricColor(value), maxLines: 1 }),
+      widgetProgress(value, barHex(value, normalHex))
     )
   ));
 }
@@ -3247,8 +3267,8 @@ function widgetCompactResources(server) {
 function widgetDiskRow(server) {
   const value = pct(server.state?.disk_used, server.host?.disk_total);
   return h("Column", { key: "widget-server-disk", gap: 3 },
-    WTX(`DISK ${value.toFixed(0)}%`, { fontSize: 10, fontWeight: 600, color: widgetColor(resourceColor(value)), maxLines: 1 }),
-    widgetProgress(value, resourceColor(value))
+    WTX(`DISK ${value.toFixed(0)}%`, { fontSize: 10, fontWeight: 600, color: widgetMetricColor(value), maxLines: 1 }),
+    widgetProgress(value, barHex(value, PAL.slate))
   );
 }
 
@@ -3270,11 +3290,11 @@ function serverWidget(family) {
   const server = resolved.server;
   const state = server.state || {};
   const online = isServerOnline(server);
-  const heading = widgetHeader(server.name || String(server.id), online ? t.online : t.offline);
+  const heading = widgetHeader(server.name || String(server.id), online ? t.online : t.offline, online ? PAL.emerald : PAL.red);
   const summary = summarizeScoped([server]);
   if (family === "small") {
     return h("Column", { gap: 8 }, heading, h("Spacer"),
-      widgetStat(`${Number(state.cpu || 0).toFixed(0)}%`, "CPU", resourceColor(state.cpu), 28),
+      widgetStat(`${Number(state.cpu || 0).toFixed(0)}%`, "CPU", widgetMetricColor(state.cpu), 28),
       widgetRates(summary),
       h("Spacer"), widgetCompactResources(server)
     );
@@ -3288,7 +3308,7 @@ function serverWidget(family) {
       const memPts = (series.memory || []).map(p => ({ value: memTotal > 0 ? (Number(p.value) / memTotal) * 100 : Number(p.value) }));
       chartCells.push(h("Column", { gap: 3 },
         WTX(`CPU / ${t.mem} (%)`, { fontSize: 10, color: "secondary" }),
-        h("Chart", { type: "area", height: 64, series: [widgetChartSeries(series.cpu, "#3b82f6"), widgetChartSeries(memPts, "#6366f1")] })
+        h("Chart", { type: "area", height: 64, series: [widgetChartSeries(series.cpu, PAL.blue), widgetChartSeries(memPts, PAL.indigo)] })
       ));
     }
     if (series.net_in_speed && series.net_in_speed.length) {
@@ -3296,20 +3316,22 @@ function serverWidget(family) {
       const wScale = pickRateScale(wPeak);
       chartCells.push(h("Column", { gap: 3 },
         WTX(`${t.networkChart} (${wScale.unit})`, { fontSize: 10, color: "secondary" }),
-        h("Chart", { type: "area", height: 64, series: [widgetChartSeries(series.net_in_speed, "#0ea5e9", wScale.divisor), widgetChartSeries(series.net_out_speed, "#10b981", wScale.divisor)] })
+        h("Chart", { type: "area", height: 64, series: [widgetChartSeries(series.net_in_speed, PAL.sky, wScale.divisor), widgetChartSeries(series.net_out_speed, PAL.emerald, wScale.divisor)] })
       ));
     }
   }
+  const memPct = pct(state.mem_used, server.host?.mem_total);
   return h("Column", { gap: 9 }, heading,
+    // Left column: CPU & Memory; Right column: Down & Up rates aligned vertically
     h("Grid", { key: "widget-server-stats", columns: 2, gap: 9 },
-      widgetStat(`${Number(state.cpu || 0).toFixed(0)}%`, "CPU", resourceColor(state.cpu)),
-      widgetStat(`${pct(state.mem_used, server.host?.mem_total).toFixed(0)}%`, t.mem, resourceColor(pct(state.mem_used, server.host?.mem_total))),
+      widgetStat(`${Number(state.cpu || 0).toFixed(0)}%`, "CPU", widgetMetricColor(state.cpu)),
       widgetStat(`↓${formatWidgetRate(state.net_in_speed)}`, t.downRate),
+      widgetStat(`${memPct.toFixed(0)}%`, t.mem, widgetMetricColor(memPct)),
       widgetStat(`↑${formatWidgetRate(state.net_out_speed)}`, t.upRate)
     ),
     widgetDiskRow(server),
     h("Row", { gap: 10 },
-      widgetTransfer(summary),
+      widgetTransfer(summary, 10),
       h("Spacer"),
       WTX(`Load ${Number(state.load_1 || 0).toFixed(2)}`, { fontSize: 10, color: "secondary" })
     ),
