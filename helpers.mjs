@@ -231,6 +231,66 @@ export function mergeServiceRows(listPayload, overviewPayload) {
     .sort((a, b) => Number(a.display_index || 0) - Number(b.display_index || 0) || String(a.name).localeCompare(String(b.name)));
 }
 
+function maskHostLabel(label) {
+  if (!label) return "";
+  return label.length <= 1 ? "*" : `${label[0]}***`;
+}
+
+function maskHost(host) {
+  const s = String(host || "").trim();
+  if (!s) return "";
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(s)) {
+    const parts = s.split(".");
+    if (parts.every(p => Number(p) <= 255)) {
+      return `${parts[0]}.*.*.${parts[3]}`;
+    }
+  }
+  const bracketed = s.startsWith("[") && s.endsWith("]");
+  const bare = bracketed ? s.slice(1, -1) : s;
+  if (bare.includes(":")) {
+    const segs = bare.split(":").filter(Boolean);
+    let masked;
+    if (segs.length >= 2) masked = `${segs[0]}:****:${segs[segs.length - 1]}`;
+    else if (bare.startsWith("::")) masked = "::****";
+    else masked = `${segs[0] || ""}:****`;
+    return bracketed ? `[${masked}]` : masked;
+  }
+  if (s.includes(".")) {
+    const labels = s.split(".");
+    const last = labels[labels.length - 1];
+    return `${labels.slice(0, -1).map(maskHostLabel).join(".")}.${last}`;
+  }
+  return maskHostLabel(s);
+}
+
+export function maskServiceTarget(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(s)) {
+    try {
+      const u = new URL(s);
+      const auth = (u.username || u.password) ? "***@" : "";
+      let host = maskHost(u.hostname);
+      if (host.includes(":") && !host.startsWith("[")) host = `[${host}]`;
+      const port = u.port ? `:${u.port}` : "";
+      const hasPathOrQuery = (u.pathname && u.pathname !== "/") || Boolean(u.search) || Boolean(u.hash);
+      return `${u.protocol}//${auth}${host}${port}${hasPathOrQuery ? "/***" : ""}`;
+    } catch {}
+  }
+  const ipv6Port = s.match(/^(\[[^\]]+\])(?::(\d+))?$/);
+  if (ipv6Port) {
+    return `${maskHost(ipv6Port[1])}${ipv6Port[2] ? `:${ipv6Port[2]}` : ""}`;
+  }
+  if (/^[0-9a-fA-F:]+$/.test(s) && (s.match(/:/g) || []).length >= 2) {
+    return maskHost(s);
+  }
+  const hostPort = s.match(/^([^\s/:]+)(?::(\d+))?$/);
+  if (hostPort) {
+    return `${maskHost(hostPort[1])}${hostPort[2] ? `:${hostPort[2]}` : ""}`;
+  }
+  return s.length <= 2 ? "***" : `${s[0]}***`;
+}
+
 export function buildAttention({ servers = [], services = [], alertRules = [], cycleTransfers = [], nowMs = Date.now() }) {
   const items = [];
   for (const s of servers) {
