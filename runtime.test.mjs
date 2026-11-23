@@ -22,6 +22,7 @@ function loadDashboard({
   outputsFn = null,
   subscription = "plus",
   inboxMock = null,
+  storage: initialStorage = {},
 }) {
   const source = fs.readFileSync(new URL("./nezha.bar", import.meta.url), "utf8");
   const match = source.match(/<script[^>]*><!\[CDATA\[([\s\S]*)\]\]><\/script>/);
@@ -33,7 +34,7 @@ function loadDashboard({
   const panelOpens = [];
   const toasts = [];
   const copied = [];
-  const storage = new Map();
+  const storage = new Map(Object.entries(initialStorage));
   class MockWebSocket {
     constructor(url) {
       this.url = url;
@@ -1126,4 +1127,257 @@ test("server detail surfaces latency fetch errors instead of empty monitor messa
   await new Promise(r => setImmediate(r));
   assert.ok(seenPaths.includes("/api/v1/server/1/service?period=30d"));
   assert.ok(seenPaths.includes("/api/v1/server/1/online-history?days=30"));
+});
+
+test("flyout tabs auto-fit short content and use flyout height when overflowing", async () => {
+  const servers = Array.from({ length: 8 }, (_, i) => ({
+    id: i + 1,
+    name: `node-${i + 1}`,
+    online: true,
+    state: { cpu: 12, mem_used: 512, net_in_speed: 1024, net_out_speed: 512, load_1: 0.4 },
+    host: { mem_total: 1024, disk_total: 1024 },
+  }));
+  let largeLists = false;
+  const makeServices = count => Array.from({ length: count }, (_, i) => ({
+    id: i + 1,
+    name: `Web-${i + 1}`,
+    type: 1,
+    target: `https://api${i + 1}.example.com/health`,
+  }));
+  const makeCycleStats = count => {
+    const server_name = {};
+    const transfer = {};
+    const next_update = {};
+    for (let i = 1; i <= count; i++) {
+      server_name[String(i)] = `node-${i}`;
+      transfer[String(i)] = 200;
+      next_update[String(i)] = "2026-11-23T10:10:00Z";
+    }
+    return {
+      "1": { name: "monthly", max: 1000, from: "2026-11-01T00:00:00Z", to: "2026-12-01T00:00:00Z", server_name, transfer, next_update },
+    };
+  };
+  let now = 1_760_000_000_000;
+  class FakeDate extends Date {
+    constructor(...args) { super(...(args.length ? args : [now])); }
+    static now() { return now; }
+  }
+  const { dashboard } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    dateImpl: FakeDate,
+    fetchImpl: async url => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/api/v1/server") return response(servers);
+      if (pathname === "/api/v1/server-group") {
+        return response([{ group: { id: 1, name: "Core" }, servers: [1, 2, 3, 4, 5, 6, 7, 8] }]);
+      }
+      if (pathname === "/api/v1/service/list") {
+        return response(makeServices(largeLists ? 8 : 6));
+      }
+      if (pathname === "/api/v1/service") {
+        const count = largeLists ? 8 : 6;
+        const services = {};
+        for (let i = 1; i <= count; i++) {
+          services[String(i)] = { service_name: `Web-${i}`, current_up: 10, current_down: 0, delay: [18] };
+        }
+        return response({ services, cycle_transfer_stats: makeCycleStats(count) });
+      }
+      if (pathname === "/api/v1/alert-rule") {
+        return response(Array.from({ length: largeLists ? 6 : 2 }, (_, i) => ({ id: i + 1, name: `Rule-${i + 1}`, enable: true })));
+      }
+      return response(basicPayload(pathname));
+    },
+  });
+  const env = { inputs: { baseURL: "https://one.example.com" } };
+  const wideEnv = { inputs: { baseURL: "https://one.example.com" }, viewport: { width: 960, height: 700 } };
+  await dashboard.scheduled(env);
+
+  const srvPanel = dashboard.render(env).panel;
+  assert.equal(srvPanel.props.preferredHeight, 626);
+
+  const switchTab = tab => {
+    const seg = findNode(dashboard.render(env).panel, n => n.type === "Segmented");
+    seg.props.onChange(tab);
+  };
+  for (const tab of ["services", "traffic", "alerts"]) {
+    switchTab(tab);
+    assert.equal(dashboard.render(env).panel.props.preferredHeight, undefined, `${tab} tab with compact count should auto-fit`);
+    assert.equal(dashboard.render(wideEnv).panel.props.preferredHeight, undefined, `${tab} tab should remain responsive in wide viewport`);
+  }
+
+  // Server detail auto-fits natively per sub-tab
+  switchTab("servers");
+  findNode(dashboard.render(env).panel, n => n.props?.key === "srv-1").props.onClick();
+  assert.equal(dashboard.render(env).panel.props.preferredHeight, undefined);
+  findNode(dashboard.render(env).panel, n => n.props?.key === "detail-back").props.onClick();
+
+  // When Services / Traffic / Alerts overflow, flyout switches to full scrollable height
+  largeLists = true;
+  now += 120_000;
+  await dashboard.scheduled(env);
+  for (const tab of ["services", "traffic", "alerts"]) {
+    switchTab(tab);
+    assert.equal(dashboard.render(env).panel.props.preferredHeight, 626, `${tab} tab with overflowing items should use flyout height`);
+    assert.equal(dashboard.render(wideEnv).panel.props.preferredHeight, undefined, `${tab} tab should remain responsive in wide viewport`);
+  }
+});
+
+test("closed panel cache rebuilds when slower traffic/service snapshots arrive after servers", async () => {
+  let outputs = { tray: true, panel: false, notch: "compact", widget: { known: true, families: [] } };
+  let releaseService;
+  const serviceGate = new Promise(resolve => { releaseService = resolve; });
+  const { dashboard } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    outputsFn: () => outputs,
+    storage: { "nezha.tab": "traffic" },
+    fetchImpl: async url => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/api/v1/service" || pathname === "/api/v1/service/list") {
+        await serviceGate;
+        if (pathname === "/api/v1/service") {
+          return response({
+            services: {},
+            cycle_transfer_stats: {
+              "1": { name: "hk-cycle", max: 1000, from: "2026-11-01T00:00:00Z", to: "2026-12-01T00:00:00Z", server_name: { "1": "alpha" }, transfer: { "1": 320 }, next_update: { "1": "2026-11-23T10:10:00Z" } },
+            },
+          });
+        }
+        return response([]);
+      }
+      return response(basicPayload(pathname));
+    },
+  });
+  const env = { inputs: { baseURL: "https://one.example.com" } };
+  const pendingRefresh = dashboard.scheduled(env);
+  // Wait for /api/v1/server to settle while /api/v1/service is still in flight
+  await new Promise(r => setTimeout(r, 20));
+  const midLoad = dashboard.render(env).panel;
+  assert.ok(!JSON.stringify(midLoad).includes("hk-cycle"), "traffic snapshot has not arrived yet");
+
+  // Once slower service/traffic snapshot resolves while panel stays closed, cache must rebuild
+  releaseService();
+  await pendingRefresh;
+  const afterService = dashboard.render(env).panel;
+  assert.ok(JSON.stringify(afterService).includes("hk-cycle"), "closed panel cache must refresh once traffic data arrives");
+  assert.equal(afterService.props.preferredHeight, undefined, "compact traffic tab should auto-fit");
+});
+
+test("refreshServices, refreshMetadata, and refreshAlertRules preserve last successful snapshots when requests fail", async () => {
+  let failSlowDomains = false;
+  let now = 1_760_000_000_000;
+  let serviceFails = 0;
+  let alertFails = 0;
+  let groupFails = 0;
+  class FakeDate extends Date {
+    constructor(...args) { super(...(args.length ? args : [now])); }
+    static now() { return now; }
+  }
+  const { dashboard } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    dateImpl: FakeDate,
+    fetchImpl: async url => {
+      const pathname = new URL(url).pathname;
+      if (failSlowDomains && (pathname === "/api/v1/service/list" || pathname === "/api/v1/service")) {
+        serviceFails += 1;
+        return new Response(JSON.stringify({ error: "temporary timeout" }), { status: 500 });
+      }
+      if (failSlowDomains && pathname === "/api/v1/alert-rule") {
+        alertFails += 1;
+        return new Response(JSON.stringify({ error: "temporary timeout" }), { status: 500 });
+      }
+      if (failSlowDomains && pathname === "/api/v1/server-group") {
+        groupFails += 1;
+        return new Response(JSON.stringify({ error: "temporary timeout" }), { status: 500 });
+      }
+      if (pathname === "/api/v1/server-group") {
+        return response([{ group: { id: 1, name: "Edge-HK" }, servers: [1] }]);
+      }
+      if (pathname === "/api/v1/service/list") {
+        return response([{ id: 1, name: "Edge Probe", type: 1, target: "https://edge.example.com/ping" }]);
+      }
+      if (pathname === "/api/v1/service") {
+        return response({
+          services: { "1": { service_name: "Edge Probe", current_up: 10, current_down: 0, delay: [15] } },
+          cycle_transfer_stats: {
+            "1": { name: "hk-monthly", max: 1000, from: "2026-11-01T00:00:00Z", to: "2026-12-01T00:00:00Z", server_name: { "1": "alpha" }, transfer: { "1": 400 }, next_update: { "1": "2026-11-23T10:10:00Z" } },
+          },
+        });
+      }
+      if (pathname === "/api/v1/alert-rule") {
+        return response([{ id: 1, name: "Offline Guard", enable: true }]);
+      }
+      return response(basicPayload(pathname));
+    },
+  });
+  const env = { inputs: { baseURL: "https://one.example.com" } };
+  await dashboard.scheduled(env);
+
+  // Trigger a refresh when service/traffic/alert/group endpoints fail
+  failSlowDomains = true;
+  now += 310_000;
+  await dashboard.scheduled(env);
+  assert.ok(serviceFails >= 2, "service endpoints should have been retried and failed");
+  assert.ok(alertFails >= 1, "alert-rule endpoint should have been retried and failed");
+  assert.ok(groupFails >= 1, "server-group endpoint should have been retried and failed");
+
+  assert.ok(JSON.stringify(dashboard.render(env).panel).includes("Edge-HK"), "server groups should keep previous snapshot on failure");
+  const switchTab = tab => findNode(dashboard.render(env).panel, n => n.type === "Segmented").props.onChange(tab);
+  switchTab("services");
+  assert.ok(JSON.stringify(dashboard.render(env).panel).includes("Edge Probe"), "services should keep previous snapshot on failure");
+  switchTab("traffic");
+  assert.ok(JSON.stringify(dashboard.render(env).panel).includes("hk-monthly"), "cycle traffic should keep previous snapshot on failure");
+  switchTab("alerts");
+  assert.ok(JSON.stringify(dashboard.render(env).panel).includes("Offline Guard"), "alert rules should keep previous snapshot on failure");
+});
+
+test("services tab masks URLs and IPs via maskServiceTargets input and quick toggle button", async () => {
+  const { dashboard } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    fetchImpl: async url => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/api/v1/service/list") {
+        return response([
+          { id: 1, name: "API Health", type: 1, target: "https://api.secret-site.com/v1/health?key=abc" },
+          { id: 2, name: "SSH Check", type: 3, target: "198.51.100.42:22" },
+        ]);
+      }
+      if (pathname === "/api/v1/service") {
+        return response({
+          services: {
+            "1": { service_name: "API Health", current_up: 10, current_down: 0, delay: [21] },
+            "2": { service_name: "SSH Check", current_up: 10, current_down: 0, delay: [8] },
+          },
+        });
+      }
+      return response(basicPayload(pathname));
+    },
+  });
+
+  const plainEnv = { inputs: { baseURL: "https://one.example.com", maskServiceTargets: false } };
+  await dashboard.scheduled(plainEnv);
+  findNode(dashboard.render(plainEnv).panel, n => n.type === "Segmented").props.onChange("services");
+
+  const plainJson = JSON.stringify(dashboard.render(plainEnv).panel);
+  assert.ok(plainJson.includes("https://api.secret-site.com/v1/health?key=abc"));
+  assert.ok(plainJson.includes("198.51.100.42:22"));
+
+  // Enable via dashboard input
+  const maskedEnv = { inputs: { baseURL: "https://one.example.com", maskServiceTargets: true } };
+  const maskedPanel = dashboard.render(maskedEnv).panel;
+  const maskedJson = JSON.stringify(maskedPanel);
+  assert.ok(maskedJson.includes("https://a***.s***.com/***"));
+  assert.ok(maskedJson.includes("198.*.*.42:22"));
+  assert.ok(!maskedJson.includes("secret-site"));
+  assert.ok(!maskedJson.includes("198.51.100.42"));
+
+  // Toggle back to unmasked via quick toolbar button
+  const toggleBtn = findNode(maskedPanel, n => n.props?.key === "svc-mask-toggle");
+  assert.ok(toggleBtn && typeof toggleBtn.props.onClick === "function");
+  toggleBtn.props.onClick();
+  const toggledJson = JSON.stringify(dashboard.render(maskedEnv).panel);
+  assert.ok(toggledJson.includes("https://api.secret-site.com/v1/health?key=abc"));
+
+  // Toggle back to masked via quick toolbar button
+  findNode(dashboard.render(maskedEnv).panel, n => n.props?.key === "svc-mask-toggle").props.onClick();
+  assert.ok(!JSON.stringify(dashboard.render(maskedEnv).panel).includes("secret-site"));
 });

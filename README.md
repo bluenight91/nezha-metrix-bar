@@ -38,7 +38,7 @@
 - **桌面小组件** — small / medium / large 三种尺寸、完整中英本地化、四种可配置内容：全局总览（小尺寸居中大号在线比与对称网速、中尺寸精简 2×2 指标与累计流量、大尺寸含聚合带宽趋势图与 CPU Top 3）、单服务器、周期流量、关注事项；单机支持 ID、唯一完整名称或跟随面板选中项，large 复用详情历史曲线
   - Metrix.Bar 0.3+ 支持安装多个 Nezha 实例以同时放置不同模式的小组件或监控多套哪吒集群
 - **流量 Tab** — 周期流量提醒（来自 `/api/v1/service` 的 `cycle_transfer_stats`）：每条周期一张卡，显示已用/配额、剩余量、占比条、周期起止、下次更新；≥80% 变橙、≥95% 变红
-- **服务 Tab** — HTTP / Ping / TCP 探测列表：存活率、最新延迟、失败标红；类型过滤
+- **服务 Tab** — HTTP / Ping / TCP 探测列表：存活率、最新延迟、失败标红；类型过滤；支持通过设置项 `maskServiceTargets` 或筛选栏右侧快捷按钮一键对探测目标 URL / 域名 / IP 脱敏打码
 - **关注 Tab + Plus Inbox 告警** — 实时关注事项（离线主机 + 失败探测 + 周期流量阈值）+ **Metrix.Bar Plus 收件箱 Webhook / 邮件告警流**（接收哪吒后端完整规则告警，支持展开详情、复制、标记已读/未读与删除）+ PAT `nezha:alertrule:read` 告警规则列表
 - **通知与省流** — 离线 / 探测失败 / 周期流量 / Inbox 告警均支持点击通知直达对应节点或告警；基于 `$metrix.outputs()` 按需裁剪渲染与详情请求，并监听 `network.change` 在唤醒/切网后即时重连刷新
 - **认证** — 游客模式（站点需允许未登录读取）或 PAT；强制登录站点会显示明确的「请填写 API Token」提示
@@ -80,6 +80,7 @@ https://awesome.metrix.bar/dashboards/index.json
 | `offlineNotify` | bool | 服务器离线桌面通知（默认开） |
 | `probeNotify` | bool | 探测失败桌面通知（默认开） |
 | `trafficNotify` | bool | 周期流量跨越 80% / 95% 时通知（默认开） |
+| `maskServiceTargets` | bool | 在「服务」Tab 中对探测目标 URL、域名与 IP 地址脱敏打码（默认关，亦可在面板内一键切换） |
 
 PAT 在管理前端 **设置 → API Tokens** 创建；Token 只会保存在系统凭据库（secret input），不会出现在源码或日志中。
 
@@ -89,7 +90,7 @@ PAT 在管理前端 **设置 → API Tokens** 创建；Token 只会保存在系�
 
 ```sh
 git clone https://github.com/bluenight91/nezha-metrix-bar
-node --test helpers.test.mjs runtime.test.mjs   # 纯函数 + 真实 .bar 脚本运行时测试（86 个）
+node --test helpers.test.mjs runtime.test.mjs   # 纯函数 + 真实 .bar 脚本运行时测试（91 个）
 ```
 
 - `nezha.bar` — 看板本体（单文件，协议 v0）

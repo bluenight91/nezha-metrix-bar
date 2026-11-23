@@ -13,6 +13,7 @@ import {
   pickRateScale,
   formatBytes,
   mergeServiceRows,
+  maskServiceTarget,
   buildAttention,
   trayTitle,
   buildCycleTransfers,
@@ -659,4 +660,34 @@ test("alignMonitorSeries snaps staggered monitor timestamps onto a shared x grid
     aligned[1].map(p => p.ts),
     "all active monitors must share identical x timestamps for multi-series hover"
   );
+});
+
+test("maskServiceTarget masks IPv4, IPv6, hostnames, and full URLs while keeping shape readable", () => {
+  assert.equal(maskServiceTarget(""), "");
+  assert.equal(maskServiceTarget("   "), "");
+
+  // IPv4 with and without port
+  assert.equal(maskServiceTarget("198.51.100.42"), "198.*.*.42");
+  assert.equal(maskServiceTarget("198.51.100.42:8443"), "198.*.*.42:8443");
+
+  // IPv6 with and without brackets/port
+  assert.equal(maskServiceTarget("2001:db8:85a3::8a2e:370:7334"), "2001:****:7334");
+  assert.equal(maskServiceTarget("[2001:db8::1]:443"), "[2001:****:1]:443");
+  assert.equal(maskServiceTarget("::1"), "::****");
+
+  // Hostnames with and without port
+  assert.equal(maskServiceTarget("example.com"), "e***.com");
+  assert.equal(maskServiceTarget("api.example.com"), "a***.e***.com");
+  assert.equal(maskServiceTarget("hk.example.com:443"), "h***.e***.com:443");
+
+  // Full URLs (root path, deep path + query, userinfo + IPv4, IPv6)
+  assert.equal(maskServiceTarget("https://mon.example.com/"), "https://m***.e***.com");
+  assert.equal(maskServiceTarget("https://api.example.com:8443/v1/health?token=secret"), "https://a***.e***.com:8443/***");
+  assert.equal(maskServiceTarget("http://admin:pass@198.51.100.42:8080/ping"), "http://***@198.*.*.42:8080/***");
+  assert.equal(maskServiceTarget("https://[2001:db8::1]:8443/status"), "https://[2001:****:1]:8443/***");
+  assert.equal(maskServiceTarget("https://[2001:db8::1]:443/status"), "https://[2001:****:1]/***");
+
+  // Arbitrary fallback string should never leak raw secret
+  const maskedRaw = maskServiceTarget("internal-secret-target");
+  assert.ok(maskedRaw.includes("*") && !maskedRaw.includes("secret"));
 });

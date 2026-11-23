@@ -3,7 +3,7 @@
      widget="true"
      notch="true"
      category="monitoring"
-     version="2.0.1"
+     version="2.0.2"
      icon="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNMjEuMSAwdjE4Ni4yTDE1Mi40IDI2OCA0NjMuOCA3OC42IDQ0MS43IDc3VjB6IiBzdHlsZT0iZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojMGE5NGYyIi8+PHBhdGggZD0iTTE2My45IDM3MCAyMS4xIDI3OS45djEyOC4zTDIzMC43IDUxMmwyMDkuNi0xMDMuOFYxNzUuOEw0OTEgOTMuM3oiIHN0eWxlPSJmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOiMwMzM4ZDYiLz48L3N2Zz4="
      description="Monitor Nezha servers, service probes, cycle traffic, and live alerts from your menu bar, notch, and desktop widgets."
      license="AGPL-3.0-only"
@@ -92,6 +92,10 @@
     <input name="trafficNotify" type="bool" label="Notify on Cycle Traffic Warning" default="true"
            help="Notify when a cycle traffic quota crosses 80% or 95%.">
       <locale lang="zh-Hans" label="周期流量预警通知" help="周期流量使用率首次达到 80% 或 95% 时发送提醒。" />
+    </input>
+    <input name="maskServiceTargets" type="bool" label="Mask Service URLs &amp; IPs" default="false"
+           help="Mask URLs, hostnames, and IP addresses shown in the Services tab for privacy or screenshots.">
+      <locale lang="zh-Hans" label="服务目标 URL / IP 打码" help="在“服务”标签页中对探测目标的 URL、域名和 IP 地址进行脱敏打码，适合隐私保护或截图分享。" />
     </input>
   </inputs>
 
@@ -401,6 +405,66 @@ function mergeServiceRows(listPayload, overviewPayload) {
       };
     })
     .sort((a, b) => Number(a.display_index || 0) - Number(b.display_index || 0) || String(a.name).localeCompare(String(b.name)));
+}
+
+function maskHostLabel(label) {
+  if (!label) return "";
+  return label.length <= 1 ? "*" : `${label[0]}***`;
+}
+
+function maskHost(host) {
+  const s = String(host || "").trim();
+  if (!s) return "";
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(s)) {
+    const parts = s.split(".");
+    if (parts.every(p => Number(p) <= 255)) {
+      return `${parts[0]}.*.*.${parts[3]}`;
+    }
+  }
+  const bracketed = s.startsWith("[") && s.endsWith("]");
+  const bare = bracketed ? s.slice(1, -1) : s;
+  if (bare.includes(":")) {
+    const segs = bare.split(":").filter(Boolean);
+    let masked;
+    if (segs.length >= 2) masked = `${segs[0]}:****:${segs[segs.length - 1]}`;
+    else if (bare.startsWith("::")) masked = "::****";
+    else masked = `${segs[0] || ""}:****`;
+    return bracketed ? `[${masked}]` : masked;
+  }
+  if (s.includes(".")) {
+    const labels = s.split(".");
+    const last = labels[labels.length - 1];
+    return `${labels.slice(0, -1).map(maskHostLabel).join(".")}.${last}`;
+  }
+  return maskHostLabel(s);
+}
+
+function maskServiceTarget(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(s)) {
+    try {
+      const u = new URL(s);
+      const auth = (u.username || u.password) ? "***@" : "";
+      let host = maskHost(u.hostname);
+      if (host.includes(":") && !host.startsWith("[")) host = `[${host}]`;
+      const port = u.port ? `:${u.port}` : "";
+      const hasPathOrQuery = (u.pathname && u.pathname !== "/") || Boolean(u.search) || Boolean(u.hash);
+      return `${u.protocol}//${auth}${host}${port}${hasPathOrQuery ? "/***" : ""}`;
+    } catch {}
+  }
+  const ipv6Port = s.match(/^(\[[^\]]+\])(?::(\d+))?$/);
+  if (ipv6Port) {
+    return `${maskHost(ipv6Port[1])}${ipv6Port[2] ? `:${ipv6Port[2]}` : ""}`;
+  }
+  if (/^[0-9a-fA-F:]+$/.test(s) && (s.match(/:/g) || []).length >= 2) {
+    return maskHost(s);
+  }
+  const hostPort = s.match(/^([^\s/:]+)(?::(\d+))?$/);
+  if (hostPort) {
+    return `${maskHost(hostPort[1])}${hostPort[2] ? `:${hostPort[2]}` : ""}`;
+  }
+  return s.length <= 2 ? "***" : `${s[0]}***`;
 }
 
 function buildAttention({ servers = [], services = [], alertRules = [], cycleTransfers = [], nowMs = Date.now() }) {
@@ -1046,6 +1110,8 @@ const ICONS = {
   check: svgIcon('<polyline points="20 6 9 17 4 12"/>', 2.1),
   chevronUp: svgIcon('<polyline points="18 15 12 9 6 15"/>', 2.2),
   chevronDown: svgIcon('<polyline points="6 9 12 15 18 9"/>', 2.2),
+  eye: svgIcon('<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>'),
+  eyeOff: svgIcon('<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/>'),
 };
 
 const I18N = {
@@ -1065,6 +1131,10 @@ const I18N = {
     tabServices: "服务",
     tabTraffic: "流量",
     tabAlerts: "关注",
+    maskShort: "打码",
+    maskedShort: "已打码",
+    maskTargets: "隐藏服务 URL / IP",
+    unmaskTargets: "显示原始服务 URL / IP",
     cycleCount: "周期",
     cycleWarn: "超 80%",
     emptyTraffic: "没有设置周期流量提醒的主机",
@@ -1189,6 +1259,10 @@ const I18N = {
     tabServices: "Services",
     tabTraffic: "Traffic",
     tabAlerts: "Alerts",
+    maskShort: "Mask",
+    maskedShort: "Masked",
+    maskTargets: "Mask service URLs & IPs",
+    unmaskTargets: "Show raw service URLs & IPs",
     cycleCount: "Cycles",
     cycleWarn: ">80%",
     emptyTraffic: "No cycle traffic limits configured",
@@ -1316,6 +1390,9 @@ let widgetServer = "";
 let offlineNotify = true;
 let probeNotify = true;
 let trafficNotify = true;
+let maskServiceTargetsInput = false;
+let hasSyncedMaskInput = false;
+let maskTargetsOverride = localStorage.getItem("nezha.maskTargets") || "";
 let authMode = "guest";
 let wsDegraded = false;
 let forceAuthHint = false;
@@ -1336,6 +1413,8 @@ let servers = new Map();
 let groups = [];
 let byServerGroup = new Map();
 let serviceRows = [];
+let lastServiceList = null;
+let lastServiceOverview = null;
 let alertRules = [];
 let fleetHistory = [];
 let lastSampleAt = 0;
@@ -1369,7 +1448,7 @@ let reconnectTimer = null;
 let lastTitle = "Nezha";
 let lastWidgetConfig = "";
 let cachedPanelTree = null;
-let cachedPanelHadData = false;
+let cachedPanelSig = "";
 let activeNotchActivity = null;
 let networkOnline = true;
 
@@ -1536,6 +1615,8 @@ function resetConnectionState() {
   groups = [];
   byServerGroup = new Map();
   serviceRows = [];
+  lastServiceList = null;
+  lastServiceOverview = null;
   alertRules = [];
   cycleTransfers = [];
   fleetHistory = [];
@@ -1564,7 +1645,7 @@ function resetConnectionState() {
   lastMetadataRefresh = 0;
   lastAlertRefresh = 0;
   cachedPanelTree = null;
-  cachedPanelHadData = false;
+  cachedPanelSig = "";
 }
 
 function syncInputs(env) {
@@ -1615,6 +1696,20 @@ function syncInputs(env) {
   offlineNotify = inputs.offlineNotify !== false && inputs.offlineNotify !== "false";
   probeNotify = inputs.probeNotify !== false && inputs.probeNotify !== "false";
   trafficNotify = inputs.trafficNotify !== false && inputs.trafficNotify !== "false";
+  const nextMaskTargets = inputs.maskServiceTargets === true || inputs.maskServiceTargets === "true";
+  if (hasSyncedMaskInput && nextMaskTargets !== maskServiceTargetsInput) {
+    maskTargetsOverride = "";
+    localStorage.setItem("nezha.maskTargets", "");
+    $metrix.invalidate();
+  }
+  maskServiceTargetsInput = nextMaskTargets;
+  hasSyncedMaskInput = true;
+}
+
+function isServiceTargetMasked() {
+  if (maskTargetsOverride === "true") return true;
+  if (maskTargetsOverride === "false") return false;
+  return maskServiceTargetsInput;
 }
 
 function persistWatch() {
@@ -1772,27 +1867,34 @@ async function refreshServices() {
   if (!beginDomain("services")) return;
   const generation = connectionGeneration;
   try {
-    const [list, overview] = await Promise.all([
-      nezhaFetch("/api/v1/service/list").catch(() => []),
-      nezhaFetch("/api/v1/service").catch(() => ({ services: {} })),
+    const [listRes, overviewRes] = await Promise.allSettled([
+      nezhaFetch("/api/v1/service/list"),
+      nezhaFetch("/api/v1/service"),
     ]);
     if (generation !== connectionGeneration) return;
-    serviceRows = mergeServiceRows(list, overview);
-    cycleTransfers = buildCycleTransfers(overview);
-    lastServiceRefresh = Date.now();
-    const traffic = detectTrafficThresholds(prevTrafficLevels, cycleTransfers);
-    if (hadServiceSnapshot && trafficNotify) {
-      for (const c of traffic.crossed) {
-        const tag = `nezha-traffic-${c.id}-${c.level}`;
-        sendNotification(
-          T().trafficAlertTitle,
-          `${c.serverName} · ${c.cycle} · ${c.pct.toFixed(1)}%`,
-          tag
-        );
-        triggerNotchActivity(tag, 300000, true);
+    const listOk = listRes.status === "fulfilled";
+    const overviewOk = overviewRes.status === "fulfilled";
+    if (!listOk && !overviewOk) return;
+    if (listOk) lastServiceList = listRes.value || [];
+    if (overviewOk) lastServiceOverview = overviewRes.value || { services: {} };
+    serviceRows = mergeServiceRows(lastServiceList || [], lastServiceOverview || { services: {} });
+    if (overviewOk) {
+      cycleTransfers = buildCycleTransfers(lastServiceOverview);
+      const traffic = detectTrafficThresholds(prevTrafficLevels, cycleTransfers);
+      if (hadServiceSnapshot && trafficNotify) {
+        for (const c of traffic.crossed) {
+          const tag = `nezha-traffic-${c.id}-${c.level}`;
+          sendNotification(
+            T().trafficAlertTitle,
+            `${c.serverName} · ${c.cycle} · ${c.pct.toFixed(1)}%`,
+            tag
+          );
+          triggerNotchActivity(tag, 300000, true);
+        }
       }
+      prevTrafficLevels = traffic.nextLevels;
     }
-    prevTrafficLevels = traffic.nextLevels;
+    lastServiceRefresh = Date.now();
     maybeNotify();
     hadServiceSnapshot = true;
   } finally {
@@ -1804,16 +1906,22 @@ async function refreshMetadata() {
   if (!beginDomain("metadata")) return;
   const generation = connectionGeneration;
   try {
-    const [nextSettings, groupPayload] = await Promise.all([
+    const [settingsRes, groupsRes] = await Promise.allSettled([
       nezhaFetch("/api/v1/setting"),
-      nezhaFetch("/api/v1/server-group").catch(() => []),
+      nezhaFetch("/api/v1/server-group"),
     ]);
     if (generation !== connectionGeneration) return;
-    settings = nextSettings || {};
-    applyGroups(groupPayload);
-    lastMetadataRefresh = Date.now();
-  } catch (e) {
-    if (generation === connectionGeneration) error = String(e && e.message || e);
+    if (settingsRes.status === "fulfilled") {
+      settings = settingsRes.value || {};
+    }
+    if (groupsRes.status === "fulfilled") {
+      applyGroups(groupsRes.value || []);
+    }
+    if (settingsRes.status === "fulfilled" || groupsRes.status === "fulfilled") {
+      lastMetadataRefresh = Date.now();
+    } else if (settingsRes.status === "rejected") {
+      error = String(settingsRes.reason && settingsRes.reason.message || settingsRes.reason);
+    }
   } finally {
     endDomain("metadata");
   }
@@ -1823,10 +1931,11 @@ async function refreshAlertRules() {
   if (!apiToken || !beginDomain("alerts")) return;
   const generation = connectionGeneration;
   try {
-    const rules = await nezhaFetch("/api/v1/alert-rule").catch(() => []);
+    const rules = await nezhaFetch("/api/v1/alert-rule");
     if (generation !== connectionGeneration) return;
-    alertRules = rules || [];
+    alertRules = Array.isArray(rules) ? rules : [];
     lastAlertRefresh = Date.now();
+  } catch {
   } finally {
     endDomain("alerts");
   }
@@ -3039,6 +3148,10 @@ function serverDetailBody(s) {
   return { detailActions, detailSubTabs, nodes };
 }
 
+function flyoutPanelHeight() {
+  return Math.min(638, 588 + (groups.length > 0 ? 38 : 0) + (wsDegraded ? 12 : 0));
+}
+
 function serverDetail(s) {
   const t = T();
   const { detailActions, detailSubTabs, nodes } = serverDetailBody(s);
@@ -3116,9 +3229,7 @@ function serversPanel(viewportWidth = 0) {
   const body = list.length
     ? (effectiveView === "table" ? serverTable(list, selectedServerId, true) : serverGrid(list, selectedServerId))
     : [TX(t.emptyServers, { tw: "text-[12px] text-textMuted" })];
-  const fourRowHeight = list.length > 6
-    ? Math.min(638, 588 + (groups.length > 0 ? 38 : 0) + (wsDegraded ? 12 : 0))
-    : undefined;
+  const fourRowHeight = list.length > 6 ? flyoutPanelHeight() : undefined;
   return panelShell(
     [brandHeader(false), topTabs(), overviewCard(), serversToolbar(effectiveView === "table")],
     wsDegraded ? [TX(t.wsDegraded, { tw: "text-[11px] text-[#f59e0b] line-clamp-1" }), ...body] : body,
@@ -3128,6 +3239,7 @@ function serversPanel(viewportWidth = 0) {
 
 function serviceRow(r) {
   const borderCls = r.failing ? "border-[#ef444466]" : selectedServiceId === String(r.id) ? "border-[#3b82f6]" : `border-${cardBorder()}`;
+  const targetText = isServiceTargetMasked() ? maskServiceTarget(r.target) : (r.target || "");
   return h(
     "Column",
     {
@@ -3145,7 +3257,7 @@ function serviceRow(r) {
         : TX(`${r.upPercent.toFixed(1)}%`, { tw: "w-[46px] text-right text-[11px] font-semibold tabular-nums text-[#10b981] shrink-0" })
     ),
     h("Row", { tw: "items-center w-full" },
-      TX(r.target || "", { tw: "text-[10.5px] text-textMuted truncate" }),
+      TX(targetText, { tw: "text-[10.5px] text-textMuted truncate" }),
       h("Spacer"),
       TX(r.delay != null ? `${r.delay.toFixed(1)} ms` : "", { tw: "text-[10.5px] tabular-nums text-textMuted shrink-0" })
     )
@@ -3155,6 +3267,7 @@ function serviceRow(r) {
 function servicesPanel(viewportWidth = 0) {
   const t = T();
   const isWide = viewportWidth >= 860;
+  const masked = isServiceTargetMasked();
   const items = [
     { label: t.all, value: "all" },
     { label: "HTTP", value: "HTTP" },
@@ -3181,13 +3294,30 @@ function servicesPanel(viewportWidth = 0) {
       brandHeader(isWide),
       topTabs(),
       summary,
-      h("Row", { tw: "items-center w-full" },
+      h("Row", { tw: "items-center gap-2 w-full" },
         CompactToggle(items, serviceFilter, v => { serviceFilter = String(v || "all"); $metrix.invalidate(); }, "svc-filter"),
-        h("Spacer")
+        h("Spacer"),
+        h("Row", {
+          key: "svc-mask-toggle",
+          tooltip: masked ? t.unmaskTargets : t.maskTargets,
+          tw: `items-center gap-1 h-[24px] px-2 rounded-lg border cursor-pointer shrink-0 ${
+            masked
+              ? "bg-[#0a94f218] border-[#0a94f255] text-[#0a94f2]"
+              : `bg-background border-${cardBorder()} text-textMuted hover:bg-surfaceHover`
+          }`,
+          onClick: () => {
+            maskTargetsOverride = String(!masked);
+            localStorage.setItem("nezha.maskTargets", maskTargetsOverride);
+            $metrix.invalidate();
+          },
+        },
+          h("Icon", { svg: masked ? ICONS.eyeOff : ICONS.eye, tw: `size-[11px] ${masked ? "text-[#0a94f2]" : "text-textMuted"}` }),
+          TX(masked ? t.maskedShort : t.maskShort, { tw: `text-[10.5px] font-medium ${masked ? "text-[#0a94f2]" : "text-textMuted"}` })
+        )
       ),
     ],
     body,
-    { width: isWide ? Math.min(1080, viewportWidth) : 520, isWide }
+    { width: isWide ? Math.min(1080, viewportWidth) : 520, height: rows.length > 6 ? flyoutPanelHeight() : undefined, isWide }
   );
 }
 
@@ -3237,7 +3367,11 @@ function trafficPanel(viewportWidth = 0) {
         return h("Row", { key: `cyc-row-${i}`, tw: "gap-2.5 w-full items-start" }, ...cells);
       })
     : [TX(t.emptyTraffic, { tw: "text-[12px] text-textMuted" })];
-  return panelShell([brandHeader(isWide), topTabs(), summary], body, { width: isWide ? Math.min(1080, viewportWidth) : 520, isWide });
+  return panelShell([brandHeader(isWide), topTabs(), summary], body, {
+    width: isWide ? Math.min(1080, viewportWidth) : 520,
+    height: cycleTransfers.length > 6 ? flyoutPanelHeight() : undefined,
+    isWide,
+  });
 }
 
 function attentionRow(it) {
@@ -3395,10 +3529,16 @@ function alertsPanelFn(viewportWidth = 0) {
     ? [TX(t.rules, { tw: "text-[11px] font-semibold text-textMuted pt-1 px-0.5" }), ...rules.map(ruleRow)]
     : [];
 
+  const inboxVisible = isPlusSubscription() && inboxBoxes.length > 0 ? Math.min(20, inboxAlerts.length) : 0;
+  const totalAlertItems = items.length + inboxVisible + rules.length;
   return panelShell(
     [brandHeader(isWide), topTabs(), summary],
     [...attention, ...inboxSection, ...rulesBody],
-    { width: isWide ? Math.min(1080, viewportWidth) : 520, isWide }
+    {
+      width: isWide ? Math.min(1080, viewportWidth) : 520,
+      height: totalAlertItems > 5 ? flyoutPanelHeight() : undefined,
+      isWide,
+    }
   );
 }
 
@@ -3958,6 +4098,25 @@ function trayTree() {
   return tray;
 }
 
+function closedPanelSignature() {
+  return [
+    activeTab,
+    selectedServerId || "",
+    loadedAt > 0 ? 1 : 0,
+    lastServiceRefresh > 0 ? 1 : 0,
+    lastMetadataRefresh > 0 ? 1 : 0,
+    lastAlertRefresh > 0 ? 1 : 0,
+    lastInboxRefresh > 0 ? 1 : 0,
+    servers.size,
+    groups.length,
+    serviceRows.length,
+    cycleTransfers.length,
+    alertRules.length,
+    inboxAlerts.length,
+    isServiceTargetMasked() ? 1 : 0,
+  ].join("|");
+}
+
 export default {
   async scheduled(env) {
     syncInputs(env);
@@ -3972,10 +4131,11 @@ export default {
     syncInputs(env);
     const demand = readOutputs();
     const out = { tray: trayTree() };
-    const shouldRebuildPanel = !demand.known || demand.panel || !cachedPanelTree || (loadedAt > 0 && !cachedPanelHadData);
+    const panelSig = closedPanelSignature();
+    const shouldRebuildPanel = !demand.known || demand.panel || !cachedPanelTree || cachedPanelSig !== panelSig;
     if (shouldRebuildPanel) {
       cachedPanelTree = panelTree(env);
-      cachedPanelHadData = loadedAt > 0;
+      cachedPanelSig = panelSig;
     }
     out.panel = cachedPanelTree;
     const w = widgetTrees(demand);
