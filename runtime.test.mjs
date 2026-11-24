@@ -1205,10 +1205,10 @@ test("flyout tabs auto-fit short content and use flyout height when overflowing"
     assert.equal(dashboard.render(wideEnv).panel.props.preferredHeight, undefined, `${tab} tab should remain responsive in wide viewport`);
   }
 
-  // Server detail auto-fits natively per sub-tab
+  // Server detail preserves full flyout height while loading so entering from list never collapses height
   switchTab("servers");
   findNode(dashboard.render(env).panel, n => n.props?.key === "srv-1").props.onClick();
-  assert.equal(dashboard.render(env).panel.props.preferredHeight, undefined);
+  assert.equal(dashboard.render(env).panel.props.preferredHeight, 626);
   findNode(dashboard.render(env).panel, n => n.props?.key === "detail-back").props.onClick();
 
   // When Services / Traffic / Alerts overflow, flyout switches to full scrollable height
@@ -1517,4 +1517,80 @@ test("group navigator uses full-width pill bar when groups fit and switches to S
   await d2.scheduled(smallEnv);
   const scrollNav = findNode(d2.render(smallEnv).panel, n => n.props?.key === "groups");
   assert.equal(scrollNav.type, "ScrollHorizontal");
+});
+
+test("server detail keeps full flyout height for charts/monitors and auto-fits compact online sub-tab", async () => {
+  const nowMs = Date.now();
+  const mkSeries = (base, step) => Array.from({ length: 12 }, (_, i) => ({
+    ts: nowMs - (11 - i) * 300_000,
+    value: base + i * step,
+  }));
+  const mkMon = (id, name, base) => ({
+    monitor_id: id,
+    monitor_name: name,
+    display_index: 10 - id,
+    server_id: 1,
+    server_name: "edge-1",
+    created_at: Array.from({ length: 12 }, (_, i) => nowMs - (11 - i) * 300_000),
+    avg_delay: Array.from({ length: 12 }, (_, i) => base + i),
+  });
+  const { dashboard } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    fetchImpl: async url => {
+      const u = new URL(url);
+      if (u.pathname === "/api/v1/server-group") {
+        return response([{ group: { id: 1, name: "JP" }, servers: [1] }]);
+      }
+      if (u.pathname === "/api/v1/server/1/metrics") {
+        return response({ data_points: mkSeries(20, 2) });
+      }
+      if (u.pathname === "/api/v1/server/1/service") {
+        return response([
+          mkMon(1, "Tokyo IX", 5),
+          mkMon(2, "HK BGP", 34),
+          mkMon(3, "SG Transit", 68),
+          mkMon(4, "LA CN2", 142),
+        ]);
+      }
+      if (u.pathname === "/api/v1/server/1/online-history") {
+        const days = Number(u.searchParams.get("days")) || 1;
+        const daily = Array.from({ length: days }, (_, i) => ({
+          date: new Date(nowMs - (days - 1 - i) * 86400_000).toISOString().slice(0, 10),
+          online_seconds: 86400,
+          offline_seconds: 0,
+          online_rate: 100,
+        }));
+        return response({
+          server_id: 1,
+          days,
+          online_rate: 100,
+          total_online_seconds: days * 86400,
+          total_offline_seconds: 0,
+          last_active: new Date(nowMs - 2000).toISOString(),
+          daily,
+        });
+      }
+      return response(basicPayload(u.pathname));
+    },
+  });
+  const env = { inputs: { baseURL: "https://one.example.com" } };
+  await dashboard.scheduled(env);
+
+  // Clicking a server opens detail with full flyout height immediately (loading) and after load (overview charts)
+  findNode(dashboard.render(env).panel, n => n.props?.key === "srv-1").props.onClick();
+  assert.equal(dashboard.render(env).panel.props.preferredHeight, 626);
+  await new Promise(r => setTimeout(r, 30));
+  assert.equal(dashboard.render(env).panel.props.preferredHeight, 626);
+
+  // Network sub-tab with 4 monitors keeps full flyout height
+  findNode(dashboard.render(env).panel, n => n.props?.key === "detail-tab-network").props.onClick();
+  assert.equal(dashboard.render(env).panel.props.preferredHeight, 626);
+
+  // Online sub-tab with 1 day (compact) auto-fits, while 7 days expands to full flyout height
+  findNode(dashboard.render(env).panel, n => n.props?.key === "detail-tab-online").props.onClick();
+  assert.equal(dashboard.render(env).panel.props.preferredHeight, undefined);
+
+  findNode(dashboard.render(env).panel, n => n.props?.key === "period-7d").props.onClick();
+  await new Promise(r => setTimeout(r, 30));
+  assert.equal(dashboard.render(env).panel.props.preferredHeight, 626);
 });
