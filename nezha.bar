@@ -3,7 +3,7 @@
      widget="true"
      notch="true"
      category="monitoring"
-     version="2.0.3"
+     version="2.0.4"
      icon="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNMjEuMSAwdjE4Ni4yTDE1Mi40IDI2OCA0NjMuOCA3OC42IDQ0MS43IDc3VjB6IiBzdHlsZT0iZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojMGE5NGYyIi8+PHBhdGggZD0iTTE2My45IDM3MCAyMS4xIDI3OS45djEyOC4zTDIzMC43IDUxMmwyMDkuNi0xMDMuOFYxNzUuOEw0OTEgOTMuM3oiIHN0eWxlPSJmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOiMwMzM4ZDYiLz48L3N2Zz4="
      description="Monitor Nezha servers, service probes, cycle traffic, and live alerts from your menu bar, notch, and desktop widgets."
      license="AGPL-3.0-only"
@@ -593,6 +593,49 @@ function formatMonthDayTime(iso) {
   if (Number.isNaN(d.getTime())) return "";
   const pad = n => String(n).padStart(2, "0");
   return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatCycleRange(fromIso, toIso) {
+  const from = new Date(fromIso);
+  const to = new Date(toIso);
+  const hasFrom = !Number.isNaN(from.getTime());
+  const hasTo = !Number.isNaN(to.getTime());
+  if (!hasFrom && !hasTo) return "";
+  if (!hasFrom) return `${to.getMonth() + 1}/${to.getDate()}`;
+  if (!hasTo) return `${from.getMonth() + 1}/${from.getDate()}`;
+  if (from.getFullYear() === to.getFullYear()) {
+    return `${from.getMonth() + 1}/${from.getDate()} – ${to.getMonth() + 1}/${to.getDate()}`;
+  }
+  const fy = String(from.getFullYear()).slice(-2);
+  const ty = String(to.getFullYear()).slice(-2);
+  return `${fy}/${from.getMonth() + 1}/${from.getDate()} – ${ty}/${to.getMonth() + 1}/${to.getDate()}`;
+}
+
+function computeCycleTimeProgress(fromIso, toIso, nowMs = Date.now()) {
+  const fromMs = Date.parse(fromIso);
+  const toMs = Date.parse(toIso);
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) return null;
+  const totalMs = toMs - fromMs;
+  const elapsedMs = Math.max(0, Math.min(totalMs, nowMs - fromMs));
+  const remainingMs = Math.max(0, toMs - nowMs);
+  const timePct = Math.max(0, Math.min(100, (elapsedMs / totalMs) * 100));
+  return { timePct, remainingMs, totalMs, elapsedMs, ended: nowMs >= toMs };
+}
+
+function formatCycleRemaining(remainingMs, lang = "zh") {
+  if (!Number.isFinite(remainingMs)) return "";
+  const isZh = lang !== "en";
+  if (remainingMs <= 0) return isZh ? "已结束" : "Ended";
+  if (remainingMs < 3_600_000) {
+    const mins = Math.max(1, Math.ceil(remainingMs / 60_000));
+    return isZh ? `剩 ${mins} 分钟` : `${mins}m left`;
+  }
+  if (remainingMs < 23.5 * 3_600_000) {
+    const hours = Math.max(1, Math.round(remainingMs / 3_600_000));
+    return isZh ? `剩 ${hours} 小时` : `${hours}h left`;
+  }
+  const days = Math.max(1, Math.round(remainingMs / 86_400_000));
+  return isZh ? `剩 ${days} 天` : `${days}d left`;
 }
 
 function formatClockTime(ts) {
@@ -1209,6 +1252,8 @@ const I18N = {
     cycleWarn: "超 80%",
     emptyTraffic: "没有设置周期流量提醒的主机",
     nextUpdate: "下次更新",
+    cycleUsedPct: "流量",
+    cycleTimePct: "时间",
     all: "全部",
     starred: "已选",
     sortCpu: "CPU",
@@ -1337,6 +1382,8 @@ const I18N = {
     cycleWarn: ">80%",
     emptyTraffic: "No cycle traffic limits configured",
     nextUpdate: "Next",
+    cycleUsedPct: "Used",
+    cycleTimePct: "Time",
     all: "All",
     starred: "Watch",
     sortCpu: "CPU",
@@ -3496,28 +3543,42 @@ function cycleCard(c) {
   const t = T();
   const compact = isCompactFlyout();
   const barColor = c.pct >= 95 ? PAL.red : c.pct >= 80 ? PAL.amber : PAL.emerald;
+  const timeBarColor = isDarkTheme() ? "#64748b" : "#94a3b8";
   const borderCls = c.pct >= 95 ? "border-[#ef444466]" : c.pct >= 80 ? "border-[#f59e0b66]" : `border-${cardBorder()}`;
+  const timeInfo = computeCycleTimeProgress(c.from, c.to, Date.now());
+  const rangeText = formatCycleRange(c.from, c.to);
+  const remainText = timeInfo ? formatCycleRemaining(timeInfo.remainingMs, locale) : "";
   return h(
     "Column",
     { key: `cyc-${c.id}`, tw: `gap-2 ${compact ? "p-2.5" : "p-3"} rounded-xl bg-background border ${borderCls} grow basis-0 min-w-0` },
-    h("Row", { tw: "items-center gap-1.5 w-full" },
-      TX(c.serverName, { tw: "text-[12.5px] font-semibold text-text truncate grow min-w-0" }),
-      TX(`${c.pct.toFixed(1)}%`, { tw: `text-[11px] font-bold tabular-nums shrink-0 text-[${barColor}]` })
-    ),
-    h("Row", { tw: "items-center w-full" },
-      TX(c.cycle, { tw: "text-[9.5px] font-medium text-[#0a94f2] px-1.5 py-0.5 rounded bg-[#0a94f214] truncate" })
+    h("Column", { tw: "gap-1 w-full" },
+      h("Row", { tw: "items-center gap-1.5 w-full" },
+        TX(c.serverName, { tw: "text-[12.5px] font-semibold text-text truncate grow min-w-0" }),
+        TX(`${t.cycleUsedPct} ${c.pct.toFixed(1)}%`, { tw: `text-[10.5px] font-bold tabular-nums shrink-0 text-[${barColor}]` })
+      ),
+      h("Row", { tw: "items-center gap-1.5 w-full" },
+        TX(c.cycle, { tw: "text-[10px] font-medium text-[#0a94f2] truncate grow min-w-0" }),
+        timeInfo
+          ? TX(`${t.cycleTimePct} ${timeInfo.timePct.toFixed(1)}%`, { tw: "text-[10px] font-medium tabular-nums shrink-0 text-textMuted" })
+          : null
+      )
     ),
     h("Row", { tw: "items-end gap-1.5 w-full" },
       TX(`${formatBytes(c.used, 1, true)} / ${formatBytes(c.max, 1, true)}`, { tw: "text-[11.5px] font-semibold text-text tabular-nums" }),
       h("Spacer"),
       TX(`${t.remaining} ${formatBytes(c.remaining, 1, true)}`, { tw: "text-[10px] tabular-nums text-textMuted" })
     ),
-    capsuleBar(c.pct, barColor, "h-[4px]"),
-    h("Row", { tw: "items-center gap-1 w-full" },
-      TX(`${formatMonthDay(c.from)} - ${formatMonthDay(c.to)}`, { tw: "text-[9.5px] tabular-nums text-textMuted truncate" }),
-      h("Spacer"),
-      TX(`${t.nextUpdate} ${formatMonthDayTime(c.nextUpdate)}`, { tw: "text-[9.5px] tabular-nums text-textMuted truncate" })
-    )
+    h("Column", { tw: "gap-[3px] w-full" },
+      capsuleBar(c.pct, barColor, "h-[4px]"),
+      timeInfo ? capsuleBar(timeInfo.timePct, timeBarColor, "h-[2.5px]") : null
+    ),
+    (rangeText || remainText)
+      ? h("Row", { tw: "items-center gap-1.5 w-full" },
+          rangeText ? TX(rangeText, { tw: "text-[9.5px] tabular-nums text-textMuted truncate min-w-0" }) : null,
+          h("Spacer"),
+          remainText ? TX(remainText, { tw: "text-[9.5px] tabular-nums text-textMuted shrink-0" }) : null
+        )
+      : null
   );
 }
 
