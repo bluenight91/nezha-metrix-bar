@@ -43,6 +43,7 @@ import {
   buildTrayContent,
   resolvePanelWidth,
   chooseGroupNavMode,
+  shouldUseFullDetailHeight,
   sortServerList,
   resolveOutputDemand,
   parseNotificationTarget,
@@ -737,4 +738,23 @@ test("maskServiceTarget masks IPv4, IPv6, hostnames, and full URLs while keeping
   // Arbitrary fallback string should never leak raw secret
   const maskedRaw = maskServiceTarget("internal-secret-target");
   assert.ok(maskedRaw.includes("*") && !maskedRaw.includes("secret"));
+});
+
+test("shouldUseFullDetailHeight expands rich detail views and auto-fits compact ones", () => {
+  assert.equal(shouldUseFullDetailHeight({ tab: "overview", loading: true }), true);
+  assert.equal(shouldUseFullDetailHeight({ tab: "overview", hasResourceChart: true }), true);
+  assert.equal(shouldUseFullDetailHeight({ tab: "overview", hasNetworkChart: true }), true);
+  assert.equal(shouldUseFullDetailHeight({ tab: "overview", monitorCount: 1 }), true);
+  assert.equal(shouldUseFullDetailHeight({ tab: "overview", loading: false, hasResourceChart: false, hasNetworkChart: false, monitorCount: 0 }), false);
+
+  assert.equal(shouldUseFullDetailHeight({ tab: "network", loading: true }), true);
+  assert.equal(shouldUseFullDetailHeight({ tab: "network", monitorCount: 3 }), true);
+  assert.equal(shouldUseFullDetailHeight({ tab: "network", monitorCount: 12 }), true);
+  assert.equal(shouldUseFullDetailHeight({ tab: "network", monitorCount: 2 }), false);
+  assert.equal(shouldUseFullDetailHeight({ tab: "network", monitorCount: 0 }), false);
+
+  assert.equal(shouldUseFullDetailHeight({ tab: "online", loading: true }), true);
+  assert.equal(shouldUseFullDetailHeight({ tab: "online", dailyCount: 7 }), true);
+  assert.equal(shouldUseFullDetailHeight({ tab: "online", dailyCount: 30 }), true);
+  assert.equal(shouldUseFullDetailHeight({ tab: "online", dailyCount: 1 }), false);
 });

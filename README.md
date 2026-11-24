@@ -96,7 +96,7 @@ PAT 在管理前端 **设置 → API Tokens** 创建；Token 只会保存在系�
 
 ```sh
 git clone https://github.com/bluenight91/nezha-metrix-bar
-node --test helpers.test.mjs runtime.test.mjs   # 纯函数 + 真实 .bar 脚本运行时测试（96 个）
+node --test helpers.test.mjs runtime.test.mjs   # 纯函数 + 真实 .bar 脚本运行时测试（98 个）
 ```
 
 - `nezha.bar` — 看板本体（单文件，协议 v0）

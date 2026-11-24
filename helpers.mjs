@@ -733,6 +733,20 @@ export function chooseGroupNavMode(groupItems, availableWidth = 380) {
   return totalWidth <= availableWidth ? "bar" : "scroll";
 }
 
+export function shouldUseFullDetailHeight({
+  tab = "overview",
+  loading = false,
+  hasResourceChart = false,
+  hasNetworkChart = false,
+  monitorCount = 0,
+  dailyCount = 0,
+} = {}) {
+  if (loading) return true;
+  if (tab === "network") return monitorCount >= 3;
+  if (tab === "online") return dailyCount > 5;
+  return Boolean(hasResourceChart || hasNetworkChart || monitorCount > 0);
+}
+
 export function buildTrayContent({ format, summary, history = [], canIcon = false, showIcon = true, brandSvg = "" }) {
   if (!["stacked_rate", "rate_spark", "cpu_spark"].includes(format)) return null;
   const gap = 3;

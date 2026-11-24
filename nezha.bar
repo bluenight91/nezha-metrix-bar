@@ -925,6 +925,20 @@ function chooseGroupNavMode(groupItems, availableWidth = 380) {
   return totalWidth <= availableWidth ? "bar" : "scroll";
 }
 
+function shouldUseFullDetailHeight({
+  tab = "overview",
+  loading = false,
+  hasResourceChart = false,
+  hasNetworkChart = false,
+  monitorCount = 0,
+  dailyCount = 0,
+} = {}) {
+  if (loading) return true;
+  if (tab === "network") return monitorCount >= 3;
+  if (tab === "online") return dailyCount > 5;
+  return Boolean(hasResourceChart || hasNetworkChart || monitorCount > 0);
+}
+
 function buildTrayContent({ format, summary, history = [], canIcon = false, showIcon = true, brandSvg = "" }) {
   if (!["stacked_rate", "rate_spark", "cpu_spark"].includes(format)) return null;
   const gap = 3;
@@ -3290,7 +3304,16 @@ function serverDetailBody(s) {
   ];
 
   const nodes = (activeDetailTab === "network" ? networkNodes : activeDetailTab === "online" ? onlineNodes : overviewNodes).filter(Boolean);
-  return { detailActions, detailSubTabs, nodes };
+  const dailyCount = online && Array.isArray(online.daily) ? Math.min(maxDailyBars, online.daily.length) : 0;
+  const fullHeight = shouldUseFullDetailHeight({
+    tab: activeDetailTab,
+    loading: Boolean(cache.loading),
+    hasResourceChart: resourceCharts.length > 0,
+    hasNetworkChart: networkCharts.length > 0,
+    monitorCount: monitorRows.length,
+    dailyCount,
+  });
+  return { detailActions, detailSubTabs, nodes, fullHeight };
 }
 
 function flyoutPanelHeight() {
@@ -3299,7 +3322,7 @@ function flyoutPanelHeight() {
 
 function serverDetail(s) {
   const t = T();
-  const { detailActions, detailSubTabs, nodes } = serverDetailBody(s);
+  const { detailActions, detailSubTabs, nodes, fullHeight } = serverDetailBody(s);
   return panelShell(
     [
       brandHeader(false),
@@ -3314,7 +3337,8 @@ function serverDetail(s) {
       ),
       detailSubTabs,
     ],
-    nodes
+    nodes,
+    { height: fullHeight ? flyoutPanelHeight() : undefined }
   );
 }
 
