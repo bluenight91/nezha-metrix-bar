@@ -3,7 +3,7 @@
      widget="true"
      notch="true"
      category="monitoring"
-     version="2.0.2"
+     version="2.0.3"
      icon="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNMjEuMSAwdjE4Ni4yTDE1Mi40IDI2OCA0NjMuOCA3OC42IDQ0MS43IDc3VjB6IiBzdHlsZT0iZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojMGE5NGYyIi8+PHBhdGggZD0iTTE2My45IDM3MCAyMS4xIDI3OS45djEyOC4zTDIzMC43IDUxMmwyMDkuNi0xMDMuOFYxNzUuOEw0OTEgOTMuM3oiIHN0eWxlPSJmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOiMwMzM4ZDYiLz48L3N2Zz4="
      description="Monitor Nezha servers, service probes, cycle traffic, and live alerts from your menu bar, notch, and desktop widgets."
      license="AGPL-3.0-only"
@@ -50,6 +50,10 @@
       <option value="rate_spark" label="Rate + Sparkline (macOS)"><locale lang="zh-Hans" label="双行速率 + 迷你流量图（macOS）" /></option>
       <option value="cpu_spark" label="CPU + Sparkline (macOS)"><locale lang="zh-Hans" label="集群 CPU + 迷你趋势图（macOS）" /></option>
     </input>
+    <input name="showTrayIcon" type="bool" label="Show Menu Bar Logo" default="true"
+           help="Show or hide the Nezha logo in the menu bar. Applies to both text and rich macOS tray styles.">
+      <locale lang="zh-Hans" label="菜单栏显示 Logo" help="在菜单栏中显示或隐藏哪吒图标，同时适用于普通文本和 macOS 富渲染模式。" />
+    </input>
     <input name="notchMetric" type="select" label="Notch Compact Metric" default="rate"
            help="Metric shown on the right wing of the notch (Metrix.Bar Plus on macOS / Windows).">
       <locale lang="zh-Hans" label="刘海屏紧凑指标" help="刘海屏右侧翼显示的紧凑数值（需 Metrix.Bar Plus，支持 macOS / Windows）。" />
@@ -70,6 +74,13 @@
       <option value="auto" label="Auto (Cards / Wide Table)"><locale lang="zh-Hans" label="自动（弹窗卡片 / 宽窗表格）" /></option>
       <option value="cards" label="Cards Grid"><locale lang="zh-Hans" label="精炼卡片网格" /></option>
       <option value="table" label="Sortable Table"><locale lang="zh-Hans" label="紧凑可排序表格" /></option>
+    </input>
+    <input name="panelWidth" type="select" label="Flyout Panel Width" default="medium"
+           help="Unified width for the menu bar flyout panel across all tabs. Wide windows and standalone app automatically expand.">
+      <locale lang="zh-Hans" label="菜单栏面板宽度" help="设置菜单栏弹窗在各标签页下的统一宽度（小 400px / 中 460px / 大 520px）；宽窗口和独立 App 会自动展开。" />
+      <option value="small" label="Small (400px)"><locale lang="zh-Hans" label="小（400px · 紧凑）" /></option>
+      <option value="medium" label="Medium (460px)"><locale lang="zh-Hans" label="中（460px · 均衡）" /></option>
+      <option value="large" label="Large (520px)"><locale lang="zh-Hans" label="大（520px · 宽松）" /></option>
     </input>
     <input name="widgetMode" type="select" label="Desktop Widget" default="overview"
            help="Content shown by desktop widgets from this instance. Install multiple Nezha instances in Metrix.Bar 0.3+ if you want different widget modes side by side.">
@@ -106,10 +117,10 @@
 2. 如站点启用了 force_auth，或需要读取隐藏节点与告警规则，请在哪吒管理端「设置 → API Tokens」创建只读 PAT（nzp_…），勾选 nezha:inventory:read、nezha:server:read、nezha:service:read（可选 nezha:alertrule:read），填入「API Token（PAT）」。令牌仅保存在系统凭据库中。
 
 v2.0 亮点
-- 菜单栏富渲染（macOS）：在「菜单栏显示格式」中选择双行紧凑速率、双行速率 + 迷你流量图，或集群 CPU + 迷你趋势图。
+- 菜单栏富渲染（macOS）：在「菜单栏显示格式」中选择双行紧凑速率、双行速率 + 迷你流量图，或集群 CPU + 迷你趋势图；可通过「菜单栏显示 Logo」自由开关图标显示。
+- 统一面板宽度与自适应布局：提供「菜单栏面板宽度」小（400px）/ 中（460px）/ 大（520px）三档调节，搭配全宽等分标签栏与自适应分组胶囊栏；在宽窗口或独立 App（宽度 ≥ 860）下自动展开左侧可排序表格 + 右侧实时详情双栏视图。
 - 刘海屏与告警动态岛（Plus）：左右侧翼显示紧凑状态，悬停/点击展开集群概览，发生离线、探针异常、流量超限或 Inbox 告警时限时高亮提醒。
 - 原生 Webhook / 邮件告警流（Plus 收件箱）：在 Metrix.Bar 创建收件箱并绑定到此实例，将哪吒通知渠道指向该地址，即可在「关注」页接收完整规则告警（含休眠期间）。
-- 宽窗口与独立 App：在宽窗口或独立 App（宽度 ≥ 860）下自动展开左侧可排序表格 + 右侧实时详情双栏视图。
 - 多尺寸桌面小组件：支持小、中、大三种尺寸与总览 / 单机 / 周期流量 / 关注四种模式；在 Metrix.Bar 0.3+ 中可安装多个实例分别绑定不同模式或集群。]]></docs>
 
   <script apis="app localStorage notification shell websocket clipboard match-media"><![CDATA[
@@ -874,9 +885,50 @@ function formatCompactNotchValue(metric, summary) {
   return formatShortRate((Number(summary.netDown) || 0) + (Number(summary.netUp) || 0));
 }
 
-function buildTrayContent({ format, summary, history = [], canIcon = false, brandSvg = "" }) {
+function estimateTrayTextWidth(text, fontSize = 9.5) {
+  let units = 0;
+  for (const ch of String(text || "")) {
+    if (ch === ".") units += 0.32;
+    else if (ch === "↑" || ch === "↓") units += 0.62;
+    else if (ch === "%") units += 0.85;
+    else if (/[0-9]/.test(ch)) units += 0.64;
+    else units += 0.68;
+  }
+  return Math.ceil(units * fontSize) + 3;
+}
+
+function resolvePanelWidth(size) {
+  if (size === "small") return 400;
+  if (size === "large") return 520;
+  return 460;
+}
+
+function estimateGroupPillWidth(label) {
+  let units = 0;
+  for (const ch of Array.from(String(label || ""))) {
+    const cp = ch.codePointAt(0) || 0;
+    if (cp >= 0x1f1e6 && cp <= 0x1f1ff) units += 0.9;
+    else if (cp > 0x2e80) units += 1.05;
+    else if (ch === " ") units += 0.35;
+    else units += 0.62;
+  }
+  return Math.ceil(units * 11) + 16;
+}
+
+function chooseGroupNavMode(groupItems, availableWidth = 380) {
+  const list = Array.isArray(groupItems) ? groupItems : [];
+  if (list.length <= 1) return "none";
+  if (list.length > 8) return "select";
+  const totalWidth = list.reduce((sum, item) => sum + estimateGroupPillWidth(item?.label), 0)
+    + Math.max(0, list.length - 1) * 2
+    + 6;
+  return totalWidth <= availableWidth ? "bar" : "scroll";
+}
+
+function buildTrayContent({ format, summary, history = [], canIcon = false, showIcon = true, brandSvg = "" }) {
   if (!["stacked_rate", "rate_spark", "cpu_spark"].includes(format)) return null;
-  const iconNode = canIcon && brandSvg
+  const gap = 3;
+  const iconNode = canIcon && showIcon && brandSvg
     ? { type: "Icon", props: { svg: brandSvg, width: 14, height: 14, fontSize: 14 }, children: [] }
     : null;
   if (format === "cpu_spark") {
@@ -885,18 +937,21 @@ function buildTrayContent({ format, summary, history = [], canIcon = false, bran
       ? { type: "Chart", props: { type: "area", width: 38, height: 18, strokeWidth: 1.2, series: [{ name: "cpu", points: pts }] }, children: [] }
       : null;
     const label = `${Math.round(Number(summary?.avgCpu) || 0)}%`;
-    const width = (iconNode ? 18 : 0) + 34 + (chart ? 42 : 0);
+    const labelWidth = Math.max(24, Math.min(40, estimateTrayTextWidth(label, 12)));
+    const parts = [iconNode ? 14 : 0, labelWidth, chart ? 38 : 0].filter(Boolean);
+    const width = parts.reduce((a, b) => a + b, 0) + Math.max(0, parts.length - 1) * gap + 2;
     return {
       type: "Row",
-      props: { width: Math.max(16, Math.min(240, width)), height: 22, gap: 4, alignItems: "center" },
+      props: { width: Math.max(16, Math.min(240, width)), height: 22, gap, alignItems: "center" },
       children: [iconNode, { type: "Text", props: { text: label, fontSize: 12, fontWeight: 600 }, children: [] }, chart].filter(Boolean),
     };
   }
   const upText = `↑${formatShortRate(summary?.netUp)}`;
   const downText = `↓${formatShortRate(summary?.netDown)}`;
+  const colWidth = Math.max(28, Math.min(46, Math.max(estimateTrayTextWidth(upText, 9.5), estimateTrayTextWidth(downText, 9.5))));
   const stacked = {
     type: "Column",
-    props: { width: 48, height: 22, justify: "space-between", alignItems: "end" },
+    props: { width: colWidth, height: 22, justify: "space-between", alignItems: "end" },
     children: [
       { type: "Text", props: { text: upText, fontSize: 9.5, fontWeight: 500 }, children: [] },
       { type: "Text", props: { text: downText, fontSize: 9.5, fontWeight: 500 }, children: [] },
@@ -906,10 +961,11 @@ function buildTrayContent({ format, summary, history = [], canIcon = false, bran
   const chart = pts.length > 1
     ? { type: "Chart", props: { type: "area", width: 36, height: 18, strokeWidth: 1.2, series: [{ name: "net", points: pts }] }, children: [] }
     : null;
-  const width = (iconNode ? 18 : 0) + 50 + (chart ? 40 : 0);
+  const parts = [iconNode ? 14 : 0, colWidth, chart ? 36 : 0].filter(Boolean);
+  const width = parts.reduce((a, b) => a + b, 0) + Math.max(0, parts.length - 1) * gap + 2;
   return {
     type: "Row",
-    props: { width: Math.max(16, Math.min(240, width)), height: 22, gap: 4, alignItems: "center" },
+    props: { width: Math.max(16, Math.min(240, width)), height: 22, gap, alignItems: "center" },
     children: [iconNode, stacked, chart].filter(Boolean),
   };
 }
@@ -1381,9 +1437,11 @@ let apiToken = "";
 let refreshSec = 5;
 let liveUpdates = true;
 let trayFormat = "online_total";
+let showTrayIcon = true;
 let notchMetric = "rate";
 let notchActivityEnabled = true;
 let serverViewPref = "auto";
+let panelWidthPref = "medium";
 let viewOverride = localStorage.getItem("nezha.view") || "";
 let widgetMode = "overview";
 let widgetServer = "";
@@ -1456,6 +1514,7 @@ let capsProbed = false;
 const caps = {
   trayContent: false,
   trayContentIcon: false,
+  trayIconClear: false,
   notch: null,
   notchActivity: null,
   widgetChart: true,
@@ -1497,9 +1556,10 @@ async function probeCapabilities() {
   const probe = async name => {
     try { return Boolean(await $metrix.caniuse(name)); } catch { return false; }
   };
-  const [tc, tci, notch, na, wc, ib, im, ir] = await Promise.all([
+  const [tc, tci, tic, notch, na, wc, ib, im, ir] = await Promise.all([
     probe("render.tray.content"),
     probe("render.tray.content.icon"),
+    probe("render.tray.icon.clear"),
     probe("render.notch"),
     probe("render.notch.activity"),
     probe("render.widget.chart"),
@@ -1509,6 +1569,7 @@ async function probeCapabilities() {
   ]);
   caps.trayContent = tc;
   caps.trayContentIcon = tci;
+  caps.trayIconClear = tic;
   caps.notch = notch;
   caps.notchActivity = na;
   caps.widgetChart = wc;
@@ -1682,11 +1743,14 @@ function syncInputs(env) {
   if (["online_total", "total", "online_both", "online", "stacked_rate", "rate_spark", "cpu_spark"].includes(tf)) {
     trayFormat = tf;
   }
+  showTrayIcon = inputs.showTrayIcon !== false && inputs.showTrayIcon !== "false";
   const nm = String(inputs.notchMetric || "rate");
   notchMetric = ["rate", "stacked_rate", "down", "up", "cpu", "online"].includes(nm) ? nm : "rate";
   notchActivityEnabled = inputs.notchActivity !== false && inputs.notchActivity !== "false";
   const sv = String(inputs.serverView || "auto");
   serverViewPref = ["auto", "cards", "table"].includes(sv) ? sv : "auto";
+  const pw = String(inputs.panelWidth || "medium");
+  panelWidthPref = ["small", "medium", "large"].includes(pw) ? pw : "medium";
   const wm = String(inputs.widgetMode || "overview");
   widgetMode = ["overview", "server", "traffic", "attention"].includes(wm) ? wm : "overview";
   widgetServer = String(inputs.widgetServer || "").trim();
@@ -2206,6 +2270,7 @@ function statusDot(colorHexOrToken, size = 7) {
 }
 
 function CompactToggle(items, value, onChange, keyPrefix) {
+  const padX = isCompactFlyout() ? "px-2" : "px-2.5";
   return h(
     "Row",
     { tw: "p-[2px] rounded-[7px] bg-surfaceHover items-center gap-[2px] shrink-0" },
@@ -2215,7 +2280,7 @@ function CompactToggle(items, value, onChange, keyPrefix) {
         "Row",
         {
           key: `${keyPrefix}-${it.value}`,
-          tw: `py-[3px] px-2.5 rounded-[5px] cursor-pointer items-center ${active ? "bg-background shadow-sm" : ""}`,
+          tw: `py-[3px] ${padX} rounded-[5px] cursor-pointer items-center ${active ? "bg-background shadow-sm" : ""}`,
           onClick: () => { if (!active) onChange(it.value); },
         },
         TX(it.label, {
@@ -2397,25 +2462,58 @@ function brandHeader(isWide = false) {
   );
 }
 
+function flyoutPanelWidth() {
+  return resolvePanelWidth(panelWidthPref);
+}
+
+function isCompactFlyout() {
+  return flyoutPanelWidth() <= 400;
+}
+
 function topTabs() {
   const t = T();
   const badge = totalAlertBadgeCount();
-  return h("Segmented", {
-    key: "main-tabs",
-    items: [
-      { label: t.tabServers, value: "servers" },
-      { label: t.tabServices, value: "services" },
-      { label: t.tabTraffic, value: "traffic" },
-      { label: badge > 0 ? `${t.tabAlerts} (${badge})` : t.tabAlerts, value: "alerts" },
-    ],
-    value: activeTab,
-    onChange: v => {
-      activeTab = String(v || "servers");
-      if (activeTab !== "servers") selectedServerId = null;
-      localStorage.setItem("nezha.tab", activeTab);
-      $metrix.invalidate();
-    },
-  });
+  const items = [
+    { label: t.tabServers, value: "servers", count: servers.size > 0 ? servers.size : null },
+    { label: t.tabServices, value: "services", count: serviceRows.length > 0 ? serviceRows.length : null },
+    { label: t.tabTraffic, value: "traffic", count: cycleTransfers.length > 0 ? cycleTransfers.length : null },
+    { label: t.tabAlerts, value: "alerts", count: badge > 0 ? badge : null, alert: badge > 0 },
+  ];
+  return h(
+    "Row",
+    { key: "main-tabs", tw: "w-full p-[3px] rounded-[10px] bg-surfaceHover items-center gap-[3px]" },
+    items.map(it => {
+      const active = activeTab === it.value;
+      return h(
+        "Row",
+        {
+          key: `main-tab-${it.value}`,
+          tw: `grow basis-0 min-w-0 justify-center items-center gap-1 px-1.5 rounded-[7px] cursor-pointer ${
+            active
+              ? `py-[5px] bg-background border border-${cardBorder()} shadow-sm`
+              : "py-[6px] hover:bg-surfacePressed"
+          }`,
+          onClick: () => {
+            if (activeTab === it.value) return;
+            activeTab = it.value;
+            if (activeTab !== "servers") selectedServerId = null;
+            localStorage.setItem("nezha.tab", activeTab);
+            $metrix.invalidate();
+          },
+        },
+        TX(it.label, {
+          tw: `text-[12px] leading-tight truncate ${active ? "font-semibold text-text" : "font-medium text-textMuted"}`,
+        }),
+        it.count != null
+          ? TX(String(it.count), {
+              tw: `text-[10.5px] leading-tight tabular-nums shrink-0 ${
+                it.alert ? "font-semibold text-[#ef4444]" : "font-normal text-textMuted"
+              }`,
+            })
+          : null
+      );
+    })
+  );
 }
 
 function statCell(value, label, color, key, sizeCls = "text-[18px]") {
@@ -2447,6 +2545,7 @@ function tintedStatTile({ key, label, value, valueColor = "text", tintHex = PAL.
 
 function kpiSparkTile({ key, label, value, valueColor = "text", tintHex = PAL.blue, sparkKey, sparkColor, progressPct, progressHex }) {
   const pts = sparkKey ? buildSparkPoints(fleetHistory, sparkKey, 30) : [];
+  const compact = isCompactFlyout();
   const valTw = valueColor === "text"
     ? "text-text"
     : String(valueColor).startsWith("#") ? `text-[${valueColor}]` : `text-${valueColor}`;
@@ -2454,11 +2553,11 @@ function kpiSparkTile({ key, label, value, valueColor = "text", tintHex = PAL.bl
     "Column",
     {
       key,
-      tw: `justify-between gap-1 py-2 px-2.5 rounded-xl border border-${cardBorder()} bg-background grow basis-0 min-w-0`,
+      tw: `justify-between gap-1 py-2 ${compact ? "px-1.5" : "px-2.5"} rounded-xl border border-${cardBorder()} bg-background grow basis-0 min-w-0`,
       linearGradient: { from: `${tintHex}12`, to: "background", angle: 135 },
     },
     TX(label, { tw: "text-[9.5px] font-medium text-textMuted leading-none truncate" }),
-    TX(value, { tw: `text-[14.5px] font-bold leading-none tabular-nums truncate ${valTw}` }),
+    TX(value, { tw: `${compact ? "text-[13px]" : "text-[14.5px]"} font-bold leading-none tabular-nums truncate ${valTw}` }),
     progressPct != null
       ? capsuleBar(progressPct, progressHex || PAL.emerald, "h-[3px]")
       : pts.length > 1
@@ -2488,10 +2587,11 @@ function overviewCard() {
   const issues = s.offline + probesDown;
   const onlineRate = s.total > 0 ? (s.online / s.total) * 100 : 0;
   const cpuHex = barHex(s.avgCpu, PAL.blue);
+  const compact = isCompactFlyout();
   return h(
     "Column",
     { tw: "gap-2 w-full" },
-    h("Row", { tw: "gap-2 w-full items-stretch" },
+    h("Row", { tw: `${compact ? "gap-1.5" : "gap-2"} w-full items-stretch` },
       kpiSparkTile({
         key: "ov-online",
         label: searchActive ? `${t.online} · ${s.total}/${unfilteredTotal}` : t.online,
@@ -2544,7 +2644,53 @@ function overviewCard() {
   );
 }
 
-function serversToolbar(isTableMode = false) {
+function groupNavigator(groupItems, groupValue, selectGroup, availableWidth) {
+  const mode = chooseGroupNavMode(groupItems, availableWidth);
+  if (mode === "none") return null;
+  if (mode === "select") {
+    return h("Select", {
+      key: "groups",
+      items: groupItems,
+      value: groupValue,
+      onChange: selectGroup,
+    });
+  }
+  const pill = (it, scrollable) => {
+    const active = it.value === groupValue;
+    return h(
+      "Row",
+      {
+        key: `group-${it.value}`,
+        tw: `${scrollable ? "shrink-0 px-2" : "grow min-w-0 px-1.5"} justify-center items-center rounded-[6px] cursor-pointer ${
+          active
+            ? `py-[3px] bg-background border border-${cardBorder()} shadow-sm`
+            : "py-[4px] hover:bg-surfacePressed"
+        }`,
+        onClick: () => { if (!active) selectGroup(it.value); },
+      },
+      TX(it.label, {
+        noWrap: true,
+        tw: `text-[11px] leading-tight ${scrollable ? "" : "truncate "}${active ? "font-semibold text-text" : "font-medium text-textMuted"}`,
+      })
+    );
+  };
+  if (mode === "scroll") {
+    return h(
+      "ScrollHorizontal",
+      { key: "groups", tw: "w-full" },
+      h("Row", { tw: "p-[3px] rounded-[9px] bg-surfaceHover items-center gap-[2px]" },
+        groupItems.map(it => pill(it, true))
+      )
+    );
+  }
+  return h(
+    "Row",
+    { key: "groups", tw: "w-full p-[3px] rounded-[9px] bg-surfaceHover items-center gap-[2px]" },
+    groupItems.map(it => pill(it, false))
+  );
+}
+
+function serversToolbar(isTableMode = false, availableWidth = flyoutPanelWidth() - (isCompactFlyout() ? 20 : 28)) {
   const t = T();
   const groupItems = [{ label: t.all, value: "all" }, ...groups.map(g => ({ label: g.name, value: g.id }))];
   const groupValue = resolveGroupSelection(selectedGroup, groups);
@@ -2554,13 +2700,8 @@ function serversToolbar(isTableMode = false) {
     $metrix.invalidate();
   };
   return h("Column", { tw: "gap-2 w-full" },
-    groupItems.length > 1 ? h(groupItems.length > 8 ? "Select" : "Segmented", {
-      key: "groups",
-      items: groupItems,
-      value: groupValue,
-      onChange: selectGroup,
-    }) : null,
-    h("Row", { tw: "gap-2 items-center w-full min-w-0" },
+    groupNavigator(groupItems, groupValue, selectGroup, availableWidth),
+    h("Row", { tw: `${isCompactFlyout() ? "gap-1.5" : "gap-2"} items-center w-full min-w-0` },
       servers.size > 6 ? h("Box", { tw: "grow min-w-0" },
         h("SearchField", {
           key: "server-search",
@@ -2595,10 +2736,11 @@ function serversToolbar(isTableMode = false) {
 
 function miniBarMetric(label, pctVal, online, normalHex) {
   const color = online ? barHex(pctVal, normalHex) : "surfaceHover";
+  const compact = isCompactFlyout();
   return h("Column", { tw: "gap-1 grow basis-0 min-w-0" },
     h("Row", { tw: "items-center justify-between w-full" },
-      TX(label, { tw: "text-[9.5px] text-textMuted font-medium" }),
-      TX(`${pctVal.toFixed(0)}%`, { tw: `text-[10.5px] font-semibold tabular-nums ${metricValueTw(pctVal, online)}` })
+      TX(label, { tw: `${compact ? "text-[9px]" : "text-[9.5px]"} text-textMuted font-medium` }),
+      TX(`${pctVal.toFixed(0)}%`, { tw: `${compact ? "text-[10px]" : "text-[10.5px]"} font-semibold tabular-nums ${metricValueTw(pctVal, online)}` })
     ),
     capsuleBar(pctVal, color, "h-[3px]")
   );
@@ -2606,6 +2748,7 @@ function miniBarMetric(label, pctVal, online, normalHex) {
 
 function serverCard(s, isSelected = false) {
   const t = T();
+  const compact = isCompactFlyout();
   const st = s.state || {};
   const host = s.host || {};
   const on = isServerOnline(s);
@@ -2620,7 +2763,7 @@ function serverCard(s, isSelected = false) {
     "Column",
     {
       key: `srv-${id}`,
-      tw: `gap-1.5 py-2 px-2.5 rounded-xl bg-background border ${borderCls} grow basis-0 min-w-0 cursor-pointer hover:bg-surfaceHover pressed:bg-surfacePressed`,
+      tw: `gap-1.5 py-2 ${compact ? "px-2" : "px-2.5"} rounded-xl bg-background border ${borderCls} grow basis-0 min-w-0 cursor-pointer hover:bg-surfaceHover pressed:bg-surfacePressed`,
       onClick: () => {
         selectedServerId = id;
         void loadMetrics(id);
@@ -2629,7 +2772,7 @@ function serverCard(s, isSelected = false) {
     },
     h("Row", { tw: "items-center gap-1.5 w-full" },
       statusDot(on ? PAL.emerald : PAL.red, 7),
-      TX(s.name || id, { tw: "text-[12.5px] font-semibold text-text truncate grow min-w-0" }),
+      TX(s.name || id, { tw: `${compact ? "text-[12px]" : "text-[12.5px]"} font-semibold text-text truncate grow min-w-0` }),
       cc ? TX(cc, { tw: "text-[9px] font-semibold text-textMuted px-1.5 py-0.5 rounded bg-surfaceHover shrink-0" }) : null,
       h("Column", {
         tw: "w-5 h-5 items-center justify-center rounded-[5px] shrink-0 cursor-pointer hover:bg-surfacePressed",
@@ -2643,7 +2786,7 @@ function serverCard(s, isSelected = false) {
         h("Icon", { svg: starred ? ICONS.starFilled : ICONS.star, tw: `size-[11px] ${starred ? "text-[#f59e0b]" : "text-textMuted"}` })
       )
     ),
-    h("Row", { tw: "gap-2.5 w-full" },
+    h("Row", { tw: `${compact ? "gap-1.5" : "gap-2.5"} w-full` },
       miniBarMetric("CPU", cpuPct, on, PAL.blue),
       miniBarMetric("MEM", memPct, on, PAL.sky),
       miniBarMetric("DSK", diskPct, on, PAL.slate)
@@ -2736,14 +2879,16 @@ function chunk(list, size) {
 }
 
 function serverGrid(list, selectedId) {
+  const rowGap = isCompactFlyout() ? "gap-1.5" : "gap-2";
   return chunk(list, 2).map((row, i) => {
     const cells = row.map(s => serverCard(s, String(selectedId || "") === String(s.id)));
     if (row.length === 1) cells.push(h("Box", { key: `ph-${i}`, tw: "grow basis-0 min-w-0" }));
-    return h("Row", { key: `row-${i}`, tw: "gap-2 w-full items-start" }, ...cells);
+    return h("Row", { key: `row-${i}`, tw: `${rowGap} w-full items-start` }, ...cells);
   });
 }
 
-function panelShell(header, body, { width = 520, height, isWide = false } = {}) {
+function panelShell(header, body, { width = flyoutPanelWidth(), height, isWide = false } = {}) {
+  const padX = !isWide && width <= 400 ? "px-2.5" : "px-3.5";
   const statusBody = [
     ...body,
     error && loadedAt ? h("Row", { tw: "gap-2 py-2 px-3 rounded-xl bg-surfaceHover items-center w-full" },
@@ -2763,11 +2908,11 @@ function panelShell(header, body, { width = 520, height, isWide = false } = {}) 
   return h(
     "Column",
     rootProps,
-    h("Column", { tw: "gap-2 px-3.5 pt-2.5 pb-2 w-full" }, ...header),
+    h("Column", { tw: `gap-2 ${padX} pt-2.5 pb-2 w-full` }, ...header),
     Line(),
     h(
       "Scroll",
-      { grow: 1, minHeight: 0, fillWidth: true, tw: "px-3.5 py-2.5" },
+      { grow: 1, minHeight: 0, fillWidth: true, tw: `${padX} py-2.5` },
       h("Column", { tw: "gap-2 w-full" }, ...statusBody)
     )
   );
@@ -3190,14 +3335,16 @@ function serversPanel(viewportWidth = 0) {
       ? (effectiveView === "table" ? serverTable(list, activeServer?.id, false) : serverGrid(list, activeServer?.id))
       : [TX(t.emptyServers, { tw: "text-[12px] text-textMuted" })];
     const detailBlock = activeServer ? serverDetailBody(activeServer) : null;
+    const wideWidth = Math.max(920, Math.min(1180, viewportWidth));
+    const wideLeftWidth = Math.max(380, wideWidth - 410 - 32);
     return h(
       "Column",
-      { preferredWidth: Math.max(920, Math.min(1180, viewportWidth)), fill: true, minHeight: 0, safeArea: true, tw: "gap-0 text-text" },
+      { preferredWidth: wideWidth, fill: true, minHeight: 0, safeArea: true, tw: "gap-0 text-text" },
       h("Column", { tw: "gap-2.5 px-4 pt-3 pb-2.5 w-full" }, brandHeader(true), topTabs(), overviewCard()),
       Line(),
       h("Row", { grow: 1, minHeight: 0, tw: "w-full gap-0" },
         h("Column", { grow: 1, minWidth: 0, minHeight: 0, tw: "gap-2.5 px-4 py-3" },
-          serversToolbar(effectiveView === "table"),
+          serversToolbar(effectiveView === "table", wideLeftWidth),
           h("Scroll", { grow: 1, minHeight: 0, fillWidth: true },
             h("Column", { tw: "gap-2.5 w-full pb-2" },
               wsDegraded ? TX(t.wsDegraded, { tw: "text-[11px] text-[#f59e0b] line-clamp-1" }) : null,
@@ -3317,17 +3464,18 @@ function servicesPanel(viewportWidth = 0) {
       ),
     ],
     body,
-    { width: isWide ? Math.min(1080, viewportWidth) : 520, height: rows.length > 6 ? flyoutPanelHeight() : undefined, isWide }
+    { width: isWide ? Math.min(1080, viewportWidth) : flyoutPanelWidth(), height: rows.length > 6 ? flyoutPanelHeight() : undefined, isWide }
   );
 }
 
 function cycleCard(c) {
   const t = T();
+  const compact = isCompactFlyout();
   const barColor = c.pct >= 95 ? PAL.red : c.pct >= 80 ? PAL.amber : PAL.emerald;
   const borderCls = c.pct >= 95 ? "border-[#ef444466]" : c.pct >= 80 ? "border-[#f59e0b66]" : `border-${cardBorder()}`;
   return h(
     "Column",
-    { key: `cyc-${c.id}`, tw: `gap-2 p-3 rounded-xl bg-background border ${borderCls} grow basis-0 min-w-0` },
+    { key: `cyc-${c.id}`, tw: `gap-2 ${compact ? "p-2.5" : "p-3"} rounded-xl bg-background border ${borderCls} grow basis-0 min-w-0` },
     h("Row", { tw: "items-center gap-1.5 w-full" },
       TX(c.serverName, { tw: "text-[12.5px] font-semibold text-text truncate grow min-w-0" }),
       TX(`${c.pct.toFixed(1)}%`, { tw: `text-[11px] font-bold tabular-nums shrink-0 text-[${barColor}]` })
@@ -3364,11 +3512,11 @@ function trafficPanel(viewportWidth = 0) {
     ? chunk(cycleTransfers, cols).map((row, i) => {
         const cells = row.map(cycleCard);
         while (cells.length < cols) cells.push(h("Box", { key: `cyc-ph-${i}-${cells.length}`, tw: "grow basis-0 min-w-0" }));
-        return h("Row", { key: `cyc-row-${i}`, tw: "gap-2.5 w-full items-start" }, ...cells);
+        return h("Row", { key: `cyc-row-${i}`, tw: `${!isWide && isCompactFlyout() ? "gap-1.5" : "gap-2.5"} w-full items-start` }, ...cells);
       })
     : [TX(t.emptyTraffic, { tw: "text-[12px] text-textMuted" })];
   return panelShell([brandHeader(isWide), topTabs(), summary], body, {
-    width: isWide ? Math.min(1080, viewportWidth) : 520,
+    width: isWide ? Math.min(1080, viewportWidth) : flyoutPanelWidth(),
     height: cycleTransfers.length > 6 ? flyoutPanelHeight() : undefined,
     isWide,
   });
@@ -3535,7 +3683,7 @@ function alertsPanelFn(viewportWidth = 0) {
     [brandHeader(isWide), topTabs(), summary],
     [...attention, ...inboxSection, ...rulesBody],
     {
-      width: isWide ? Math.min(1080, viewportWidth) : 520,
+      width: isWide ? Math.min(1080, viewportWidth) : flyoutPanelWidth(),
       height: totalAlertItems > 5 ? flyoutPanelHeight() : undefined,
       isWide,
     }
@@ -4071,8 +4219,6 @@ function trayTree() {
   if (scoped.length || servers.size) lastTitle = title;
 
   const tray = {
-    icon: "data:image/svg+xml," + encodeURIComponent(BRAND),
-    iconTemplate: true,
     title,
     tooltip: baseURL ? `${baseURL} · ${summary.online}/${summary.total} · CPU ${summary.avgCpu.toFixed(0)}%` : "Nezha",
     error: error || (forceAuthHint ? t.guestForced : "") || "",
@@ -4083,6 +4229,12 @@ function trayTree() {
       { label: t.clearWatch, onClick: () => { watchlist = new Set(); persistWatch(); $metrix.invalidate(); } },
     ],
   };
+  if (showTrayIcon) {
+    tray.icon = "data:image/svg+xml," + encodeURIComponent(BRAND);
+    tray.iconTemplate = true;
+  } else if (caps.trayIconClear) {
+    tray.icon = null;
+  }
 
   if (caps.trayContent && (scoped.length || servers.size)) {
     const rich = buildTrayContent({
@@ -4090,6 +4242,7 @@ function trayTree() {
       summary,
       history: fleetHistory,
       canIcon: caps.trayContentIcon,
+      showIcon: showTrayIcon,
       brandSvg: BRAND,
     });
     if (rich) tray.content = rich;
@@ -4102,6 +4255,7 @@ function closedPanelSignature() {
   return [
     activeTab,
     selectedServerId || "",
+    panelWidthPref,
     loadedAt > 0 ? 1 : 0,
     lastServiceRefresh > 0 ? 1 : 0,
     lastMetadataRefresh > 0 ? 1 : 0,

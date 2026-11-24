@@ -8,29 +8,33 @@
 
 **English:** A read-only Metrix.Bar menu-bar and desktop-widget dashboard for Nezha Monitoring V2 — multi-server status, bandwidth, service probes, and an attention stream.
 
-| Servers（2 列网格 + 汇总） | 单机详情（指标曲线） |
+| Servers（深色 · 2 列网格 + 汇总） | Light（浅色主题） |
 | --- | --- |
-| ![Servers](assets/servers-dark.png) | ![Detail](assets/detail.png) |
+| ![Servers Dark](assets/servers-dark.png) | ![Servers Light](assets/servers-light.png) |
 
-| Services（服务探测） | Alerts（关注事项） |
+| 单机详情 · 概览（资源与网络曲线） | 单机详情 · 网络（多线路延迟对比） |
 | --- | --- |
-| ![Services](assets/services.png) | ![Alerts](assets/alerts.png) |
+| ![Detail Overview](assets/detail.png) | ![Detail Network](assets/detail-network.png) |
 
-| Traffic（周期流量与剩余配额） | Light（浅色主题） |
+| Services（服务探测 · 支持目标打码） | Traffic（周期流量与剩余配额） |
 | --- | --- |
-| ![Traffic](assets/traffic.png) | ![Light](assets/servers-light.png) |
+| ![Services](assets/services.png) | ![Traffic](assets/traffic.png) |
 
-面板高度会随分组内实例数自适应收缩，实例较多时可滚动。
+| Alerts（关注事项 + Plus Inbox 告警） | Servers（紧凑可排序表格视图） |
+| --- | --- |
+| ![Alerts](assets/alerts.png) | ![Servers Table](assets/servers-table.png) |
+
+面板宽度支持 400px / 460px / 520px 三档统一调节，高度会随条目数自适应收缩，内容较多时可滚动。
 
 ## 功能
 
-- **托盘** — 默认 `21/21 · 1.2M/s` 在线数 + 总带宽，共 7 种格式可配，含 3 种 macOS 富渲染模式（双行紧凑速率、速率 + 迷你面积图、CPU + 迷你趋势图），不支持平台自动回退文本；错误时保留最后数值；菜单：刷新 / 打开哪吒 / 清空关注
+- **托盘** — 默认 `21/21 · 1.2M/s` 在线数 + 总带宽，共 7 种格式可配，含 3 种 macOS 富渲染模式（双行紧凑速率、速率 + 迷你面积图、CPU + 迷你趋势图），不支持平台自动回退文本；支持通过 `showTrayIcon` 自由开关菜单栏 Logo 显示并优化图标与数值间距；错误时保留最后数值；菜单：刷新 / 打开哪吒 / 清空关注
 - **刘海屏 Notch（Plus）** — 左右侧翼显示健康着色图标 + 紧凑数值（支持聚合网速 / 双行上下行速率 / 下行 / 上行 / 平均 CPU / 在线数共 6 种模式），悬停/点击展开 OLED 暗色三格 KPI 趋势磁贴与分组热点节点/告警卡片；节点离线、探针异常、流量超限或收到 Inbox 告警时自动弹出限时动态岛
-- **精致视觉与自适应布局** — `material="solid"` 通透纯色基底 + `match-media` 极细发丝边框 + 自适应内容高度；独立策划的克制色板（常规数字保持主字色，状态/趋势采用哪吒蓝、天青、翡翠绿与靛蓝点缀）、顶部 4 格微渐变 KPI 趋势磁贴与无边框 SVG 图标按钮
+- **精致视觉与自适应布局** — `material="solid"` 通透纯色基底 + `match-media` 极细发丝边框 + 全宽等分顶部标签栏 + 自适应内容高度；支持 `panelWidth` 小（400px）/ 中（460px）/ 大（520px）三档统一面板宽度；独立策划的克制色板（常规数字保持主字色，状态/趋势采用哪吒蓝、天青、翡翠绿与靛蓝点缀）、顶部 4 格微渐变 KPI 趋势磁贴与无边框 SVG 图标按钮
 - **服务器 Tab** — 哪吒原生分组 + 星标 Watchlist（`全部 / 已选` 切换，托盘与汇总跟随关注范围；空关注 = 全部）
   - 顶部 4 格趋势 KPI 磁贴：在线比、↓/↑ 实时带宽迷你图、平均 CPU 迷你图；下方轻排累计 ↓↑ 流量与异常提示；离线机器的旧速率不会计入实时汇总
   - 双视图切换：Flyout 默认 3 层精炼卡片网格，亦可一键切至**可排序紧凑表格**（支持按节点 / CPU / 内存 / 磁盘 / 下行 / 上行 / 负载点击升降序）；在宽窗口或独立 App（宽度 ≥ 860 DIP）自动展开**左侧列表 + 右侧实时详情**双栏布局
-  - 超过 6 台时支持名称 / 备注搜索；分组较多时自动切换为完整下拉选择；支持一台机器属于多个分组
+  - 超过 6 台时支持名称 / 备注搜索；自适应分组导航栏在 2–8 个分组时自动在全宽胶囊条与横向滚动条间切换，超过 8 个分组切换为完整下拉选择；支持一台机器属于多个分组
   - 点击单机 → 详情：顶部固定 **`概览 | 网络 | 在线`** 三分段与 **`1天 / 7天 / 30天`**（PAT 模式）周期切换
   - 详情「概览」：规格、当前状态、实时与累计流量、一键复制摘要、CPU·内存面积图、自适应 `B/s`–`GB/s` 单位的实时网络折线图（配单位胶囊与悬停读数，需 Dashboard 启用 TSDB）以及紧凑延迟速览入口
   - 详情「网络」：全量监控线路统一时间轴折线图 + 等宽对齐明细表（`线路 | 延迟 | 最低–最高 | 丢包`），支持**点击多条线路叠加对比**并自动缩放 Y 轴，顶部一键恢复全部线路
@@ -72,9 +76,11 @@ https://awesome.metrix.bar/dashboards/index.json
 | `refreshInterval` | select | 轮询间隔：2s / 5s（默认）/ 10s / 30s / 60s |
 | `liveUpdates` | bool | 游客模式使用 WebSocket + 30 秒 REST 对账（默认开）；关闭则完全 REST；PAT 始终 REST |
 | `trayFormat` | select | 托盘显示：4 种文本格式 + 3 种 macOS 富渲染格式（`stacked_rate` / `rate_spark` / `cpu_spark`） |
+| `showTrayIcon` | bool | 在菜单栏中显示或隐藏哪吒 Logo（默认开，同时适用于文本与 macOS 富渲染模式） |
 | `notchMetric` | select | 刘海屏右侧翼紧凑指标：`rate` 聚合网速（默认）/ `stacked_rate` 双行上下行 / `down` 下行 / `up` 上行 / `cpu` 平均 CPU / `online` 在线数 |
 | `notchActivity` | bool | 离线 / 探针异常 / 流量超限 / Inbox 告警时弹出刘海屏动态岛（默认开） |
 | `serverView` | select | 服务器布局：`auto` 自动（默认，弹窗卡片 / 宽窗表格）/ `cards` 卡片 / `table` 表格 |
+| `panelWidth` | select | 菜单栏面板宽度：`small` 小（400px · 紧凑）/ `medium` 中（460px · 均衡，默认）/ `large` 大（520px · 宽松）；宽窗口与独立 App 自动展开 |
 | `widgetMode` | select | 桌面小组件：`overview` 总览（默认）/ `server` 单机 / `traffic` 周期流量 / `attention` 关注 |
 | `widgetServer` | string（可选） | 单机 Widget 留空时跟随面板选中的服务器；也可输入 ID 或不区分大小写的唯一完整名称，重名时须使用 ID |
 | `offlineNotify` | bool | 服务器离线桌面通知（默认开） |
@@ -90,7 +96,7 @@ PAT 在管理前端 **设置 → API Tokens** 创建；Token 只会保存在系�
 
 ```sh
 git clone https://github.com/bluenight91/nezha-metrix-bar
-node --test helpers.test.mjs runtime.test.mjs   # 纯函数 + 真实 .bar 脚本运行时测试（91 个）
+node --test helpers.test.mjs runtime.test.mjs   # 纯函数 + 真实 .bar 脚本运行时测试（96 个）
 ```
 
 - `nezha.bar` — 看板本体（单文件，协议 v0）

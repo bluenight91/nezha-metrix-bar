@@ -41,6 +41,8 @@ import {
   formatShortRate,
   formatCompactNotchValue,
   buildTrayContent,
+  resolvePanelWidth,
+  chooseGroupNavMode,
   sortServerList,
   resolveOutputDemand,
   parseNotificationTarget,
@@ -485,9 +487,15 @@ test("buildTrayContent builds valid height-22 rich trees and returns null for te
   ];
   const stacked = buildTrayContent({ format: "stacked_rate", summary, history, canIcon: true, brandSvg: "<svg/>" });
   assert.equal(stacked.props.height, 22);
+  assert.equal(stacked.props.gap, 3);
   assert.ok(stacked.props.width >= 16 && stacked.props.width <= 240);
   assert.equal(stacked.children[0].type, "Icon");
   assert.equal(stacked.children[1].type, "Column");
+  assert.ok(stacked.children[1].props.width < 44, "stacked rate column should stay snug to avoid a wide gap after the logo");
+
+  const stackedNoIcon = buildTrayContent({ format: "stacked_rate", summary, history, canIcon: true, showIcon: false, brandSvg: "<svg/>" });
+  assert.equal(stackedNoIcon.children.some(c => c.type === "Icon"), false);
+  assert.ok(stackedNoIcon.props.width < stacked.props.width);
 
   const rateSpark = buildTrayContent({ format: "rate_spark", summary, history, canIcon: false });
   assert.equal(rateSpark.props.height, 22);
@@ -495,9 +503,48 @@ test("buildTrayContent builds valid height-22 rich trees and returns null for te
 
   const cpuSpark = buildTrayContent({ format: "cpu_spark", summary, history, canIcon: true, brandSvg: "<svg/>" });
   assert.equal(cpuSpark.props.height, 22);
+  assert.equal(cpuSpark.props.gap, 3);
   assert.ok(cpuSpark.children.some(c => c.type === "Chart"));
+  const cpuSparkNoIcon = buildTrayContent({ format: "cpu_spark", summary, history, canIcon: true, showIcon: false, brandSvg: "<svg/>" });
+  assert.equal(cpuSparkNoIcon.children.some(c => c.type === "Icon"), false);
+  assert.ok(cpuSparkNoIcon.props.width < cpuSpark.props.width);
   assert.equal(trayTitle("rate_spark", summary), "21/21 · ↑512K/s ↓1.00M/s");
   assert.equal(trayTitle("cpu_spark", summary), "21/21 · 22%");
+});
+
+test("resolvePanelWidth maps small/medium/large presets and falls back to medium", () => {
+  assert.equal(resolvePanelWidth("small"), 400);
+  assert.equal(resolvePanelWidth("medium"), 460);
+  assert.equal(resolvePanelWidth("large"), 520);
+  assert.equal(resolvePanelWidth(""), 460);
+  assert.equal(resolvePanelWidth("unknown"), 460);
+  assert.equal(resolvePanelWidth(null), 460);
+});
+
+test("chooseGroupNavMode picks bar, scroll, or select based on count and available width", () => {
+  assert.equal(chooseGroupNavMode([{ label: "全部", value: "all" }], 380), "none");
+  const sixRegions = [
+    { label: "全部", value: "all" },
+    { label: "🇨🇳 CN", value: "1" },
+    { label: "🇭🇰 HK", value: "2" },
+    { label: "🇯🇵 JP", value: "3" },
+    { label: "🇸🇬 SGP", value: "4" },
+    { label: "🇺🇸 US", value: "5" },
+  ];
+  assert.equal(chooseGroupNavMode(sixRegions, 380), "bar");
+
+  const longGroups = [
+    { label: "全部", value: "all" },
+    { label: "Hong Kong Edge", value: "1" },
+    { label: "Singapore Core", value: "2" },
+    { label: "Tokyo Transit", value: "3" },
+    { label: "Frankfurt EU", value: "4" },
+    { label: "Los Angeles US", value: "5" },
+  ];
+  assert.equal(chooseGroupNavMode(longGroups, 380), "scroll");
+
+  const manyGroups = Array.from({ length: 9 }, (_, i) => ({ label: `G${i}`, value: String(i) }));
+  assert.equal(chooseGroupNavMode(manyGroups, 480), "select");
 });
 
 test("sortServerList sorts multiple columns with direction while keeping offline servers last", () => {

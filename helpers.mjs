@@ -693,9 +693,50 @@ export function formatCompactNotchValue(metric, summary) {
   return formatShortRate((Number(summary.netDown) || 0) + (Number(summary.netUp) || 0));
 }
 
-export function buildTrayContent({ format, summary, history = [], canIcon = false, brandSvg = "" }) {
+function estimateTrayTextWidth(text, fontSize = 9.5) {
+  let units = 0;
+  for (const ch of String(text || "")) {
+    if (ch === ".") units += 0.32;
+    else if (ch === "↑" || ch === "↓") units += 0.62;
+    else if (ch === "%") units += 0.85;
+    else if (/[0-9]/.test(ch)) units += 0.64;
+    else units += 0.68;
+  }
+  return Math.ceil(units * fontSize) + 3;
+}
+
+export function resolvePanelWidth(size) {
+  if (size === "small") return 400;
+  if (size === "large") return 520;
+  return 460;
+}
+
+export function estimateGroupPillWidth(label) {
+  let units = 0;
+  for (const ch of Array.from(String(label || ""))) {
+    const cp = ch.codePointAt(0) || 0;
+    if (cp >= 0x1f1e6 && cp <= 0x1f1ff) units += 0.9;
+    else if (cp > 0x2e80) units += 1.05;
+    else if (ch === " ") units += 0.35;
+    else units += 0.62;
+  }
+  return Math.ceil(units * 11) + 16;
+}
+
+export function chooseGroupNavMode(groupItems, availableWidth = 380) {
+  const list = Array.isArray(groupItems) ? groupItems : [];
+  if (list.length <= 1) return "none";
+  if (list.length > 8) return "select";
+  const totalWidth = list.reduce((sum, item) => sum + estimateGroupPillWidth(item?.label), 0)
+    + Math.max(0, list.length - 1) * 2
+    + 6;
+  return totalWidth <= availableWidth ? "bar" : "scroll";
+}
+
+export function buildTrayContent({ format, summary, history = [], canIcon = false, showIcon = true, brandSvg = "" }) {
   if (!["stacked_rate", "rate_spark", "cpu_spark"].includes(format)) return null;
-  const iconNode = canIcon && brandSvg
+  const gap = 3;
+  const iconNode = canIcon && showIcon && brandSvg
     ? { type: "Icon", props: { svg: brandSvg, width: 14, height: 14, fontSize: 14 }, children: [] }
     : null;
   if (format === "cpu_spark") {
@@ -704,18 +745,21 @@ export function buildTrayContent({ format, summary, history = [], canIcon = fals
       ? { type: "Chart", props: { type: "area", width: 38, height: 18, strokeWidth: 1.2, series: [{ name: "cpu", points: pts }] }, children: [] }
       : null;
     const label = `${Math.round(Number(summary?.avgCpu) || 0)}%`;
-    const width = (iconNode ? 18 : 0) + 34 + (chart ? 42 : 0);
+    const labelWidth = Math.max(24, Math.min(40, estimateTrayTextWidth(label, 12)));
+    const parts = [iconNode ? 14 : 0, labelWidth, chart ? 38 : 0].filter(Boolean);
+    const width = parts.reduce((a, b) => a + b, 0) + Math.max(0, parts.length - 1) * gap + 2;
     return {
       type: "Row",
-      props: { width: Math.max(16, Math.min(240, width)), height: 22, gap: 4, alignItems: "center" },
+      props: { width: Math.max(16, Math.min(240, width)), height: 22, gap, alignItems: "center" },
       children: [iconNode, { type: "Text", props: { text: label, fontSize: 12, fontWeight: 600 }, children: [] }, chart].filter(Boolean),
     };
   }
   const upText = `↑${formatShortRate(summary?.netUp)}`;
   const downText = `↓${formatShortRate(summary?.netDown)}`;
+  const colWidth = Math.max(28, Math.min(46, Math.max(estimateTrayTextWidth(upText, 9.5), estimateTrayTextWidth(downText, 9.5))));
   const stacked = {
     type: "Column",
-    props: { width: 48, height: 22, justify: "space-between", alignItems: "end" },
+    props: { width: colWidth, height: 22, justify: "space-between", alignItems: "end" },
     children: [
       { type: "Text", props: { text: upText, fontSize: 9.5, fontWeight: 500 }, children: [] },
       { type: "Text", props: { text: downText, fontSize: 9.5, fontWeight: 500 }, children: [] },
@@ -725,10 +769,11 @@ export function buildTrayContent({ format, summary, history = [], canIcon = fals
   const chart = pts.length > 1
     ? { type: "Chart", props: { type: "area", width: 36, height: 18, strokeWidth: 1.2, series: [{ name: "net", points: pts }] }, children: [] }
     : null;
-  const width = (iconNode ? 18 : 0) + 50 + (chart ? 40 : 0);
+  const parts = [iconNode ? 14 : 0, colWidth, chart ? 36 : 0].filter(Boolean);
+  const width = parts.reduce((a, b) => a + b, 0) + Math.max(0, parts.length - 1) * gap + 2;
   return {
     type: "Row",
-    props: { width: Math.max(16, Math.min(240, width)), height: 22, gap: 4, alignItems: "center" },
+    props: { width: Math.max(16, Math.min(240, width)), height: 22, gap, alignItems: "center" },
     children: [iconNode, stacked, chart].filter(Boolean),
   };
 }

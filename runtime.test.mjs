@@ -355,8 +355,8 @@ test("offline attention rows can open the corresponding server detail", async ()
   });
   const env = { inputs: { baseURL: "https://one.example.com" } };
   await dashboard.scheduled(env);
-  const tabs = findNode(dashboard.render(env).panel, node => node.props?.key === "main-tabs");
-  tabs.props.onChange("alerts");
+  const alertsTab = findNode(dashboard.render(env).panel, node => node.props?.key === "main-tab-alerts");
+  alertsTab.props.onClick();
   const row = findNode(dashboard.render(env).panel, node => node.props?.key === "srv-1");
   assert.equal(typeof row.props.onClick, "function");
   row.props.onClick();
@@ -484,10 +484,10 @@ test("panel uses 4-row flyout height above 6 servers, adaptive height at or belo
   await dashboard.scheduled(flyoutEnv);
   const flyoutPanel = dashboard.render(flyoutEnv).panel;
   assert.equal(flyoutPanel.props.preferredHeight, 626);
-  assert.equal(flyoutPanel.props.preferredWidth, 520);
+  assert.equal(flyoutPanel.props.preferredWidth, 460);
   assert.ok(!JSON.stringify(flyoutPanel).includes("e-10"));
 
-  findNode(flyoutPanel, node => node.props?.key === "groups").props.onChange("1");
+  findNode(flyoutPanel, node => node.props?.key === "group-1").props.onClick();
   const filteredPanel = dashboard.render(flyoutEnv).panel;
   assert.equal(filteredPanel.props.preferredHeight, undefined);
   assert.ok(JSON.stringify(filteredPanel).includes("node-1"));
@@ -883,8 +883,8 @@ test("Plus Inbox parses webhook alerts, notifies only new arrivals, and supports
   const view = dashboard.render(env);
   assert.equal(view.notch.activity.id, "nezha-inbox-box1:2");
 
-  const tabs = findNode(view.panel, n => n.props?.key === "main-tabs");
-  tabs.props.onChange("alerts");
+  const alertsTab = findNode(view.panel, n => n.props?.key === "main-tab-alerts");
+  alertsTab.props.onClick();
   const alertsView = dashboard.render(env).panel;
   assert.ok(JSON.stringify(alertsView).includes("节点 CPU 过高"));
 
@@ -1196,8 +1196,8 @@ test("flyout tabs auto-fit short content and use flyout height when overflowing"
   assert.equal(srvPanel.props.preferredHeight, 626);
 
   const switchTab = tab => {
-    const seg = findNode(dashboard.render(env).panel, n => n.type === "Segmented");
-    seg.props.onChange(tab);
+    const btn = findNode(dashboard.render(env).panel, n => n.props?.key === `main-tab-${tab}`);
+    btn.props.onClick();
   };
   for (const tab of ["services", "traffic", "alerts"]) {
     switchTab(tab);
@@ -1321,7 +1321,7 @@ test("refreshServices, refreshMetadata, and refreshAlertRules preserve last succ
   assert.ok(groupFails >= 1, "server-group endpoint should have been retried and failed");
 
   assert.ok(JSON.stringify(dashboard.render(env).panel).includes("Edge-HK"), "server groups should keep previous snapshot on failure");
-  const switchTab = tab => findNode(dashboard.render(env).panel, n => n.type === "Segmented").props.onChange(tab);
+  const switchTab = tab => findNode(dashboard.render(env).panel, n => n.props?.key === `main-tab-${tab}`).props.onClick();
   switchTab("services");
   assert.ok(JSON.stringify(dashboard.render(env).panel).includes("Edge Probe"), "services should keep previous snapshot on failure");
   switchTab("traffic");
@@ -1355,7 +1355,7 @@ test("services tab masks URLs and IPs via maskServiceTargets input and quick tog
 
   const plainEnv = { inputs: { baseURL: "https://one.example.com", maskServiceTargets: false } };
   await dashboard.scheduled(plainEnv);
-  findNode(dashboard.render(plainEnv).panel, n => n.type === "Segmented").props.onChange("services");
+  findNode(dashboard.render(plainEnv).panel, n => n.props?.key === "main-tab-services").props.onClick();
 
   const plainJson = JSON.stringify(dashboard.render(plainEnv).panel);
   assert.ok(plainJson.includes("https://api.secret-site.com/v1/health?key=abc"));
@@ -1380,4 +1380,141 @@ test("services tab masks URLs and IPs via maskServiceTargets input and quick tog
   // Toggle back to masked via quick toolbar button
   findNode(dashboard.render(maskedEnv).panel, n => n.props?.key === "svc-mask-toggle").props.onClick();
   assert.ok(!JSON.stringify(dashboard.render(maskedEnv).panel).includes("secret-site"));
+});
+
+test("showTrayIcon toggles icon visibility in both plain text and rich macOS tray modes", async () => {
+  const { dashboard } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    capabilities: {
+      "render.tray.content": true,
+      "render.tray.content.icon": true,
+      "render.tray.icon.clear": true,
+    },
+    fetchImpl: async url => response(basicPayload(new URL(url).pathname)),
+  });
+
+  const textWithIconEnv = { inputs: { baseURL: "https://one.example.com", trayFormat: "online_total", showTrayIcon: true } };
+  await dashboard.scheduled(textWithIconEnv);
+  const textWithIcon = dashboard.render(textWithIconEnv).tray;
+  assert.ok(String(textWithIcon.icon || "").startsWith("data:image/svg+xml,"));
+  assert.equal(textWithIcon.iconTemplate, true);
+
+  const textNoIconEnv = { inputs: { baseURL: "https://one.example.com", trayFormat: "online_total", showTrayIcon: false } };
+  const textNoIcon = dashboard.render(textNoIconEnv).tray;
+  assert.equal(textNoIcon.icon, null);
+
+  const richWithIconEnv = { inputs: { baseURL: "https://one.example.com", trayFormat: "stacked_rate", showTrayIcon: true } };
+  const richWithIcon = dashboard.render(richWithIconEnv).tray;
+  assert.equal(richWithIcon.content.children[0].type, "Icon");
+  assert.equal(richWithIcon.content.props.gap, 3);
+
+  const richNoIconEnv = { inputs: { baseURL: "https://one.example.com", trayFormat: "stacked_rate", showTrayIcon: false } };
+  const richNoIcon = dashboard.render(richNoIconEnv).tray;
+  assert.equal(richNoIcon.icon, null);
+  assert.equal(richNoIcon.content.children.some(c => c.type === "Icon"), false);
+  assert.ok(richNoIcon.content.props.width < richWithIcon.content.props.width);
+});
+
+test("topTabs renders full-width equal tabs with subtle counts and panelWidth controls flyout width across all tabs", async () => {
+  let panelOpen = true;
+  const { dashboard } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    outputsFn: () => ({ tray: true, panel: panelOpen, notch: null, widget: { known: false, families: [] } }),
+    fetchImpl: async url => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/api/v1/server") {
+        return response([
+          { id: 1, name: "alpha", last_active: new Date().toISOString(), host: { mem_total: 1000, disk_total: 1000 }, state: { cpu: 20, mem_used: 300, disk_used: 400, net_in_speed: 500, net_out_speed: 200 } },
+          { id: 2, name: "offline-node", last_active: "2000-01-01T00:00:00Z", host: { mem_total: 1000, disk_total: 1000 }, state: { cpu: 0, mem_used: 0, disk_used: 0, net_in_speed: 0, net_out_speed: 0 } },
+        ]);
+      }
+      if (pathname === "/api/v1/service/list") {
+        return response([{ id: 1, name: "API", type: 1, target: "https://api.example.com" }]);
+      }
+      if (pathname === "/api/v1/service") {
+        return response({
+          services: { "1": { service_name: "API", current_up: 10, current_down: 0, delay: [12] } },
+          cycle_transfer_stats: {
+            "1": { name: "monthly", max: 1000, from: "2026-11-01T00:00:00Z", to: "2026-12-01T00:00:00Z", server_name: { "1": "alpha" }, transfer: { "1": 200 }, next_update: { "1": "2026-11-24T00:00:00Z" } },
+          },
+        });
+      }
+      return response(basicPayload(pathname));
+    },
+  });
+
+  const medEnv = { inputs: { baseURL: "https://one.example.com" } };
+  await dashboard.scheduled(medEnv);
+
+  const medPanel = dashboard.render(medEnv).panel;
+  assert.equal(medPanel.props.preferredWidth, 460);
+  const tabBar = findNode(medPanel, n => n.props?.key === "main-tabs");
+  assert.equal(tabBar.type, "Row");
+  assert.ok(tabBar.props.tw.includes("w-full"));
+  assert.equal(tabBar.children.length, 4);
+  for (const child of tabBar.children) {
+    assert.ok(child.props.tw.includes("grow basis-0"));
+  }
+  assert.ok(JSON.stringify(tabBar.children[0]).includes('"text":"2"'), "servers tab should show server count");
+  assert.ok(JSON.stringify(tabBar.children[1]).includes('"text":"1"'), "services tab should show service count");
+  assert.ok(JSON.stringify(tabBar.children[2]).includes('"text":"1"'), "traffic tab should show cycle count");
+  assert.ok(JSON.stringify(tabBar.children[3]).includes('"text":"1"'), "alerts tab should show attention count");
+
+  const smallEnv = { inputs: { baseURL: "https://one.example.com", panelWidth: "small" } };
+  const largeEnv = { inputs: { baseURL: "https://one.example.com", panelWidth: "large" } };
+  for (const tab of ["servers", "services", "traffic", "alerts"]) {
+    findNode(dashboard.render(smallEnv).panel, n => n.props?.key === `main-tab-${tab}`).props.onClick();
+    assert.equal(dashboard.render(smallEnv).panel.props.preferredWidth, 400, `${tab} tab should use 400px in small preset`);
+    assert.equal(dashboard.render(largeEnv).panel.props.preferredWidth, 520, `${tab} tab should use 520px in large preset`);
+  }
+
+  // Changing panelWidth while panel is closed must still refresh cached panel tree
+  panelOpen = false;
+  assert.equal(dashboard.render(smallEnv).panel.props.preferredWidth, 400);
+  assert.equal(dashboard.render(medEnv).panel.props.preferredWidth, 460);
+});
+
+test("group navigator uses full-width pill bar when groups fit and switches to ScrollHorizontal when labels overflow narrow widths", async () => {
+  let groupPayload = [
+    { group: { id: 1, name: "🇨🇳 CN" }, servers: [1] },
+    { group: { id: 2, name: "🇭🇰 HK" }, servers: [1] },
+    { group: { id: 3, name: "🇯🇵 JP" }, servers: [1] },
+    { group: { id: 4, name: "🇸🇬 SGP" }, servers: [1] },
+    { group: { id: 5, name: "🇺🇸 US" }, servers: [1] },
+  ];
+  const { dashboard } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    fetchImpl: async url => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/api/v1/server-group") return response(groupPayload);
+      return response(basicPayload(pathname));
+    },
+  });
+  const smallEnv = { inputs: { baseURL: "https://one.example.com", panelWidth: "small" } };
+  await dashboard.scheduled(smallEnv);
+
+  const barNav = findNode(dashboard.render(smallEnv).panel, n => n.props?.key === "groups");
+  assert.equal(barNav.type, "Row");
+  assert.equal(barNav.children.length, 6);
+  assert.ok(barNav.props.tw.includes("w-full"));
+
+  // Switch to long group names that exceed 400px flyout width
+  groupPayload = [
+    { group: { id: 1, name: "Hong Kong Edge" }, servers: [1] },
+    { group: { id: 2, name: "Singapore Core" }, servers: [1] },
+    { group: { id: 3, name: "Tokyo Transit" }, servers: [1] },
+    { group: { id: 4, name: "Frankfurt EU" }, servers: [1] },
+    { group: { id: 5, name: "Los Angeles US" }, servers: [1] },
+  ];
+  const { dashboard: d2 } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    fetchImpl: async url => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/api/v1/server-group") return response(groupPayload);
+      return response(basicPayload(pathname));
+    },
+  });
+  await d2.scheduled(smallEnv);
+  const scrollNav = findNode(d2.render(smallEnv).panel, n => n.props?.key === "groups");
+  assert.equal(scrollNav.type, "ScrollHorizontal");
 });
