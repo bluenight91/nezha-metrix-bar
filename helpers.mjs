@@ -408,6 +408,49 @@ export function formatMonthDayTime(iso) {
   return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+export function formatCycleRange(fromIso, toIso) {
+  const from = new Date(fromIso);
+  const to = new Date(toIso);
+  const hasFrom = !Number.isNaN(from.getTime());
+  const hasTo = !Number.isNaN(to.getTime());
+  if (!hasFrom && !hasTo) return "";
+  if (!hasFrom) return `${to.getMonth() + 1}/${to.getDate()}`;
+  if (!hasTo) return `${from.getMonth() + 1}/${from.getDate()}`;
+  if (from.getFullYear() === to.getFullYear()) {
+    return `${from.getMonth() + 1}/${from.getDate()} – ${to.getMonth() + 1}/${to.getDate()}`;
+  }
+  const fy = String(from.getFullYear()).slice(-2);
+  const ty = String(to.getFullYear()).slice(-2);
+  return `${fy}/${from.getMonth() + 1}/${from.getDate()} – ${ty}/${to.getMonth() + 1}/${to.getDate()}`;
+}
+
+export function computeCycleTimeProgress(fromIso, toIso, nowMs = Date.now()) {
+  const fromMs = Date.parse(fromIso);
+  const toMs = Date.parse(toIso);
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) return null;
+  const totalMs = toMs - fromMs;
+  const elapsedMs = Math.max(0, Math.min(totalMs, nowMs - fromMs));
+  const remainingMs = Math.max(0, toMs - nowMs);
+  const timePct = Math.max(0, Math.min(100, (elapsedMs / totalMs) * 100));
+  return { timePct, remainingMs, totalMs, elapsedMs, ended: nowMs >= toMs };
+}
+
+export function formatCycleRemaining(remainingMs, locale = "zh") {
+  if (!Number.isFinite(remainingMs)) return "";
+  const isZh = locale !== "en";
+  if (remainingMs <= 0) return isZh ? "已结束" : "Ended";
+  if (remainingMs < 3_600_000) {
+    const mins = Math.max(1, Math.ceil(remainingMs / 60_000));
+    return isZh ? `剩 ${mins} 分钟` : `${mins}m left`;
+  }
+  if (remainingMs < 23.5 * 3_600_000) {
+    const hours = Math.max(1, Math.round(remainingMs / 3_600_000));
+    return isZh ? `剩 ${hours} 小时` : `${hours}h left`;
+  }
+  const days = Math.max(1, Math.round(remainingMs / 86_400_000));
+  return isZh ? `剩 ${days} 天` : `${days}d left`;
+}
+
 export function formatDuration(seconds) {
   const s = Math.max(0, Math.round(Number(seconds) || 0));
   const h = Math.floor(s / 3600);

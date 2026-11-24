@@ -19,6 +19,9 @@ import {
   buildCycleTransfers,
   formatMonthDay,
   formatMonthDayTime,
+  formatCycleRange,
+  computeCycleTimeProgress,
+  formatCycleRemaining,
   formatDuration,
   buildMonitorRows,
   toggleMonitorSelection,
@@ -179,6 +182,49 @@ test("cycle date formatters render stable shapes", () => {
   assert.match(formatMonthDay("2026-11-01T00:00:00+08:00"), /^11\/1\/2026$/);
   assert.match(formatMonthDayTime("2026-11-12T16:15:00+08:00"), /^11\/12 \d{2}:\d{2}$/);
   assert.equal(formatMonthDay(""), "");
+});
+
+test("formatCycleRange omits redundant year for same-year cycles and shortens cross-year ranges", () => {
+  assert.equal(formatCycleRange("2026-10-25T00:00:00+08:00", "2026-11-25T00:00:00+08:00"), "10/25 – 11/25");
+  assert.equal(formatCycleRange("2026-07-01T00:00:00+08:00", "2027-07-01T00:00:00+08:00"), "26/7/1 – 27/7/1");
+  assert.equal(formatCycleRange("", ""), "");
+  assert.equal(formatCycleRange("2026-11-01T00:00:00+08:00", ""), "11/1");
+});
+
+test("computeCycleTimeProgress calculates elapsed ratio and clamps boundaries", () => {
+  const from = "2026-11-01T00:00:00Z";
+  const to = "2026-12-01T00:00:00Z";
+  const mid = Date.parse("2026-11-16T00:00:00Z");
+  const info = computeCycleTimeProgress(from, to, mid);
+  assert.ok(info);
+  assert.ok(Math.abs(info.timePct - 50) < 0.01);
+  assert.equal(info.remainingMs, 15 * 86_400_000);
+  assert.equal(info.ended, false);
+
+  const before = computeCycleTimeProgress(from, to, Date.parse("2026-10-31T00:00:00Z"));
+  assert.equal(before.timePct, 0);
+  assert.equal(before.ended, false);
+
+  const after = computeCycleTimeProgress(from, to, Date.parse("2026-12-02T00:00:00Z"));
+  assert.equal(after.timePct, 100);
+  assert.equal(after.remainingMs, 0);
+  assert.equal(after.ended, true);
+
+  assert.equal(computeCycleTimeProgress("", to, mid), null);
+  assert.equal(computeCycleTimeProgress(to, from, mid), null);
+});
+
+test("formatCycleRemaining formats minutes, hours, days, and ended state in zh and en", () => {
+  assert.equal(formatCycleRemaining(0, "zh"), "已结束");
+  assert.equal(formatCycleRemaining(-5000, "en"), "Ended");
+  assert.equal(formatCycleRemaining(25 * 60_000, "zh"), "剩 25 分钟");
+  assert.equal(formatCycleRemaining(25 * 60_000, "en"), "25m left");
+  assert.equal(formatCycleRemaining(8.5 * 3_600_000, "zh"), "剩 9 小时");
+  assert.equal(formatCycleRemaining(8.5 * 3_600_000, "en"), "9h left");
+  assert.equal(formatCycleRemaining(24 * 3_600_000, "zh"), "剩 1 天");
+  assert.equal(formatCycleRemaining(6.3 * 86_400_000, "zh"), "剩 6 天");
+  assert.equal(formatCycleRemaining(6.3 * 86_400_000, "en"), "6d left");
+  assert.equal(formatCycleRemaining(Number.NaN, "zh"), "");
 });
 
 test("buildMonitorRows computes loss and sorts by delay", () => {

@@ -1594,3 +1594,68 @@ test("server detail keeps full flyout height for charts/monitors and auto-fits c
   await new Promise(r => setTimeout(r, 30));
   assert.equal(dashboard.render(env).panel.props.preferredHeight, 626);
 });
+
+test("traffic cards render compact cycle range, remaining time, and traffic-vs-time progress without next-update clutter", async () => {
+  const fixedNow = Date.parse("2026-11-16T00:00:00+08:00");
+  class FakeDate extends Date {
+    constructor(...args) { super(...(args.length ? args : [fixedNow])); }
+    static now() { return fixedNow; }
+  }
+  const { dashboard } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    dateImpl: FakeDate,
+    storage: { "nezha.tab": "traffic" },
+    fetchImpl: async url => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/api/v1/service") {
+        return response({
+          services: {},
+          cycle_transfer_stats: {
+            "1": {
+              name: "edge-monthly",
+              max: 1000,
+              from: "2026-11-01T00:00:00+08:00",
+              to: "2026-12-01T00:00:00+08:00",
+              server_name: { "1": "alpha" },
+              transfer: { "1": 620 },
+              next_update: { "1": "2026-11-16T00:10:00+08:00" },
+            },
+            "2": {
+              name: "edge-yearly",
+              max: 2000,
+              from: "2026-07-01T00:00:00+08:00",
+              to: "2027-07-01T00:00:00+08:00",
+              server_name: { "2": "beta" },
+              transfer: { "2": 500 },
+              next_update: { "2": "2026-11-16T00:12:00+08:00" },
+            },
+          },
+        });
+      }
+      return response(basicPayload(pathname));
+    },
+  });
+  const env = { inputs: { baseURL: "https://one.example.com", panelWidth: "small" } };
+  await dashboard.scheduled(env);
+  const panel = dashboard.render(env).panel;
+  const serialized = JSON.stringify(panel);
+
+  assert.ok(serialized.includes("流量 62.0%"), "card should show explicit traffic usage percentage");
+  assert.ok(serialized.includes("时间 50.0%"), "card should show corresponding cycle elapsed percentage");
+  assert.ok(serialized.includes("11/1 – 12/1"), "same-year cycle should omit redundant year");
+  assert.ok(serialized.includes("26/7/1 – 27/7/1"), "cross-year cycle should use compact 2-digit years");
+  assert.ok(serialized.includes("剩 15 天"), "card should show remaining cycle time");
+  assert.ok(!serialized.includes("下次更新"), "card should omit low-value next-update timestamp");
+
+  const card1 = findNode(panel, n => n.props?.key === "cyc-1:1");
+  const fillNodes = [];
+  const collect = node => {
+    if (!node || typeof node !== "object") return;
+    if (node.props?.key === "progress-fill") fillNodes.push(node);
+    if (Array.isArray(node.children)) node.children.forEach(collect);
+  };
+  collect(card1);
+  assert.equal(fillNodes.length, 2, "card should render both traffic and cycle-time progress bars");
+  assert.ok(fillNodes[0].props.tw.includes("w-[62%]"), "top bar reflects traffic usage percentage");
+  assert.ok(fillNodes[1].props.tw.includes("w-[50%]"), "bottom bar reflects cycle time percentage");
+});
