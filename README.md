@@ -29,7 +29,7 @@
 ## 功能
 
 - **托盘** — 默认 `21/21 · 1.2M/s` 在线数 + 总带宽，共 7 种格式可配，含 3 种 macOS 富渲染模式（双行紧凑速率、速率 + 迷你面积图、CPU + 迷你趋势图），不支持平台自动回退文本；支持通过 `showTrayIcon` 自由开关菜单栏 Logo 显示并优化图标与数值间距；错误时保留最后数值；菜单：刷新 / 打开哪吒 / 清空关注
-- **刘海屏 Notch（Plus）** — 左右侧翼显示健康着色图标 + 紧凑数值（支持聚合网速 / 双行上下行速率 / 下行 / 上行 / 平均 CPU / 在线数共 6 种模式），悬停/点击展开 OLED 暗色三格 KPI 趋势磁贴与分组热点节点/告警卡片；节点离线、探针异常、流量超限或收到 Inbox 告警时自动弹出限时动态岛
+- **刘海屏 Notch（Plus）** — 左右侧翼显示健康着色图标 + 紧凑数值（支持聚合网速 / 双行上下行速率 / 下行 / 上行 / 平均 CPU / 在线数共 6 种模式），悬停/点击展开 OLED 暗色三格 KPI 趋势磁贴与分组热点节点/告警卡片；节点离线、探针异常、流量超限或收到 Inbox 告警时自动弹出限时动态岛，在 Metrix.Bar 0.3.3+ 中开启「Allow automatic notch expansion」后严重告警还可自动短时展开详情卡片
 - **精致视觉与自适应布局** — `material="solid"` 通透纯色基底 + `match-media` 极细发丝边框 + 全宽等分顶部标签栏 + 自适应内容高度；支持 `panelWidth` 小（400px）/ 中（460px）/ 大（520px）三档统一面板宽度；独立策划的克制色板（常规数字保持主字色，状态/趋势采用哪吒蓝、天青、翡翠绿与靛蓝点缀）、顶部 4 格微渐变 KPI 趋势磁贴与无边框 SVG 图标按钮
 - **服务器 Tab** — 哪吒原生分组 + 星标 Watchlist（`全部 / 已选` 切换，托盘与汇总跟随关注范围；空关注 = 全部）
   - 顶部 4 格趋势 KPI 磁贴：在线比、↓/↑ 实时带宽迷你图、平均 CPU 迷你图；下方轻排累计 ↓↑ 流量与异常提示；离线机器的旧速率不会计入实时汇总
@@ -41,10 +41,10 @@
   - 详情「在线」：在线率 / 累计在线 / 累计离线 / 最后活跃 + 每日在线时长条（`/api/v1/server/{id}/online-history`）
 - **桌面小组件** — small / medium / large 三种尺寸、完整中英本地化、四种可配置内容：全局总览（小尺寸居中大号在线比与对称网速、中尺寸精简 2×2 指标与累计流量、大尺寸含聚合带宽趋势图与 CPU Top 3）、单服务器、周期流量、关注事项；单机支持 ID、唯一完整名称或跟随面板选中项，large 复用详情历史曲线
   - Metrix.Bar 0.3+ 支持安装多个 Nezha 实例以同时放置不同模式的小组件或监控多套哪吒集群
-- **流量 Tab** — 周期流量提醒（来自 `/api/v1/service` 的 `cycle_transfer_stats`）：每条周期一张卡，显示已用/配额、剩余量、已用流量占比与周期时间占比双进度条对比、精简周期起止与剩余时间；≥80% 变橙、≥95% 变红
+- **流量 Tab** — 周期流量提醒（来自 `/api/v1/service` 的 `cycle_transfer_stats`）：每条周期一张卡，显示已用/配额、剩余量、已用流量占比与周期时间占比双进度条对比、精简周期起止与剩余时间；按当前速率预计期末超额时高亮提示预计百分比，≥80% 变橙、≥95% 变红
 - **服务 Tab** — HTTP / Ping / TCP 探测列表：存活率、最新延迟、失败标红；类型过滤；支持通过设置项 `maskServiceTargets` 或筛选栏右侧快捷按钮一键对探测目标 URL / 域名 / IP 脱敏打码
-- **关注 Tab + Plus Inbox 告警** — 实时关注事项（离线主机 + 失败探测 + 周期流量阈值）+ **Metrix.Bar Plus 收件箱 Webhook / 邮件告警流**（接收哪吒后端完整规则告警，支持展开详情、复制、标记已读/未读与删除）+ PAT `nezha:alertrule:read` 告警规则列表
-- **通知与省流** — 离线 / 探测失败 / 周期流量 / Inbox 告警均支持点击通知直达对应节点或告警；基于 `$metrix.outputs()` 按需裁剪渲染与详情请求，并监听 `network.change` 在唤醒/切网后即时重连刷新
+- **关注 Tab + Plus Inbox 告警** — 实时关注事项（离线主机 + 失败探测 + 周期流量阈值）+ **Metrix.Bar Plus 收件箱 Webhook / 邮件告警流**（接收哪吒后端完整规则告警，支持展开详情、一键复制对勾反馈、标记已读/未读与删除）+ PAT `nezha:alertrule:read` 告警规则列表
+- **通知与省流** — 离线 / 探测失败 / 周期流量 / Inbox 告警均支持点击通知直达对应节点或告警；在 Metrix.Bar 0.3.3+ 支持副标题、macOS 通知分组、单次多条告警自动合并以及低优先级静音推送；基于 `$metrix.outputs()` 按需裁剪渲染与详情请求，并监听 `network.change` 在唤醒/切网后即时重连刷新
 - **认证** — 游客模式（站点需允许未登录读取）或 PAT；强制登录站点会显示明确的「请填写 API Token」提示
 - **数据通道** — `liveUpdates` 开启时，游客站点使用 `/api/v1/ws/server` WebSocket + 每 30 秒 REST 对账；关闭后完全使用 REST。PAT 始终按配置间隔（2–60s）进行 REST 轮询（Worker 的 WebSocket 无法携带 `Authorization` 头，把 PAT 放进 URL 会泄漏）
 - **分级刷新** — 服务数据至少 15 秒、设置与分组 5 分钟、告警规则 60 秒更新一次；手动刷新立即拉取全量。详情请求并行、去重，缓存最多保留 8 个服务器/周期条目
@@ -78,25 +78,25 @@ https://awesome.metrix.bar/dashboards/index.json
 | `trayFormat` | select | 托盘显示：4 种文本格式 + 3 种 macOS 富渲染格式（`stacked_rate` / `rate_spark` / `cpu_spark`） |
 | `showTrayIcon` | bool | 在菜单栏中显示或隐藏哪吒 Logo（默认开，同时适用于文本与 macOS 富渲染模式） |
 | `notchMetric` | select | 刘海屏右侧翼紧凑指标：`rate` 聚合网速（默认）/ `stacked_rate` 双行上下行 / `down` 下行 / `up` 上行 / `cpu` 平均 CPU / `online` 在线数 |
-| `notchActivity` | bool | 离线 / 探针异常 / 流量超限 / Inbox 告警时弹出刘海屏动态岛（默认开） |
+| `notchActivity` | bool | 离线 / 探针异常 / 流量超限 / Inbox 告警时弹出刘海屏动态岛（默认开）；在 Metrix.Bar 0.3.3+ 看板显示设置中开启「Allow automatic notch expansion」后严重告警可自动短时展开 |
 | `serverView` | select | 服务器布局：`auto` 自动（默认，弹窗卡片 / 宽窗表格）/ `cards` 卡片 / `table` 表格 |
 | `panelWidth` | select | 菜单栏面板宽度：`small` 小（400px · 紧凑）/ `medium` 中（460px · 均衡，默认）/ `large` 大（520px · 宽松）；宽窗口与独立 App 自动展开 |
 | `widgetMode` | select | 桌面小组件：`overview` 总览（默认）/ `server` 单机 / `traffic` 周期流量 / `attention` 关注 |
 | `widgetServer` | string（可选） | 单机 Widget 留空时跟随面板选中的服务器；也可输入 ID 或不区分大小写的唯一完整名称，重名时须使用 ID |
 | `offlineNotify` | bool | 服务器离线桌面通知（默认开） |
 | `probeNotify` | bool | 探测失败桌面通知（默认开） |
-| `trafficNotify` | bool | 周期流量跨越 80% / 95% 时通知（默认开） |
+| `trafficNotify` | bool | 周期流量跨越 80% / 95% 或按当前消耗速率预计提前耗尽时通知（默认开） |
 | `maskServiceTargets` | bool | 在「服务」Tab 中对探测目标 URL、域名与 IP 地址脱敏打码（默认关，亦可在面板内一键切换） |
 
 PAT 在管理前端 **设置 → API Tokens** 创建；Token 只会保存在系统凭据库（secret input），不会出现在源码或日志中。
 
-在系统小组件选择器中添加 **Metrix.Bar** 并选择 **Nezha**，即可放置桌面卡片。macOS 需要 14+ 与 Metrix.Bar 0.2.0+；Windows 11 22H2+ 和 KDE Plasma 6 的支持范围以 Metrix.Bar 文档为准。Metrix.Bar 0.3+ 支持安装多个 Nezha 实例以同时放置不同模式的小组件；系统控制刷新时机，仅 Widget 保持活跃时最快每分钟更新一次。设置标签、选项和帮助文本通过 `<locale lang="zh-Hans">` 跟随 App 的简体中文界面，默认英文；静态 `<docs>` 配置说明不支持按 App 语言切换，现统一使用简体中文。
+在系统小组件选择器中添加 **Metrix.Bar** 并选择 **Nezha**，即可放置桌面卡片。macOS 需要 14+ 与 Metrix.Bar 0.2.0+；Windows 11 22H2+ 和 KDE Plasma 6 的支持范围以 Metrix.Bar 文档为准。Metrix.Bar 0.3+ 支持安装多个 Nezha 实例以同时放置不同模式的小组件；系统控制刷新时机，仅 Widget 保持活跃时最快每分钟更新一次。看板标题、简介、配置说明（`<docs>`）以及全部设置标签、选项和帮助文本均已通过 `<locale lang="zh-Hans">` 适配 Metrix.Bar 简体中文与英文界面（0.3.3+ 自动切换，旧版平滑回退）。
 
 ## 开发
 
 ```sh
 git clone https://github.com/bluenight91/nezha-metrix-bar
-node --test helpers.test.mjs runtime.test.mjs   # 纯函数 + 真实 .bar 脚本运行时测试（102 个）
+node --test helpers.test.mjs runtime.test.mjs   # 纯函数 + 真实 .bar 脚本运行时测试（110 个）
 ```
 
 - `nezha.bar` — 看板本体（单文件，协议 v0）
