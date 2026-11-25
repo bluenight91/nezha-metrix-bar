@@ -32,6 +32,7 @@ function loadDashboard({
   const notifications = [];
   const invalidations = [];
   const panelOpens = [];
+  const notchStates = [];
   const toasts = [];
   const copied = [];
   const storage = new Map(Object.entries(initialStorage));
@@ -60,6 +61,12 @@ function loadDashboard({
     subscription() { return subscription; },
     panel: {
       async open() { panelOpens.push(Date.now()); return { open: true }; },
+    },
+    notch: {
+      async setState(state, options) {
+        notchStates.push({ state, options });
+        return "accepted";
+      },
     },
   };
   if (capabilities) {
@@ -102,7 +109,7 @@ function loadDashboard({
     $metrix: metrixHost,
   });
   vm.runInContext(code, context);
-  return { dashboard: context.dashboard, sockets, notifications, invalidations, panelOpens, toasts, copied, storage, context };
+  return { dashboard: context.dashboard, sockets, notifications, invalidations, panelOpens, notchStates, toasts, copied, storage, context };
 }
 
 test("changing Dashboard URL closes the old WebSocket before connecting", async () => {
@@ -1658,4 +1665,209 @@ test("traffic cards render compact cycle range, remaining time, and traffic-vs-t
   assert.equal(fillNodes.length, 2, "card should render both traffic and cycle-time progress bars");
   assert.ok(fillNodes[0].props.tw.includes("w-[62%]"), "top bar reflects traffic usage percentage");
   assert.ok(fillNodes[1].props.tw.includes("w-[50%]"), "bottom bar reflects cycle time percentage");
+});
+
+test("0.3.3 alerts coalesce bursts, include subtitle/group/silent, and auto-expand notch when granted", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1760000000000 });
+  let phase = 0;
+  let notchGrant = true;
+  const { dashboard, notifications, notchStates, storage } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    capabilities: {
+      "render.notch": true,
+      "render.notch.activity": true,
+      "notch.setState": true,
+      "notification.subtitle": true,
+      "notification.group": true,
+      "notification.silent": true,
+    },
+    fetchImpl: async url => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/api/v1/server") {
+        const nowIso = new Date().toISOString();
+        const offIso = new Date(Date.now() - 120000).toISOString();
+        return response([
+          { id: 1, name: "alpha", last_active: phase === 0 ? nowIso : offIso, host: { mem_total: 1000, disk_total: 1000 }, state: { cpu: 10, mem_used: 200, disk_used: 300, net_in_speed: 100, net_out_speed: 50 } },
+          { id: 2, name: "beta", last_active: phase === 0 ? nowIso : offIso, host: { mem_total: 1000, disk_total: 1000 }, state: { cpu: 15, mem_used: 250, disk_used: 350, net_in_speed: 100, net_out_speed: 50 } },
+        ]);
+      }
+      return response(basicPayload(pathname));
+    },
+  });
+  const env = { inputs: { baseURL: "https://one.example.com" } };
+  await dashboard.scheduled(env);
+  assert.equal(notifications.length, 0);
+  assert.equal(notchStates.length, 0);
+
+  phase = 1;
+  t.mock.timers.tick(6000);
+  await dashboard.scheduled(env);
+  await Promise.resolve();
+  assert.equal(notifications.length, 1, "two simultaneous offline servers coalesce into one notification");
+  assert.equal(notifications[0].options.tag, "nezha-off-batch");
+  assert.equal(notifications[0].options.group, "nezha-offline");
+  assert.ok(notifications[0].options.subtitle.includes("2"));
+  assert.ok(notifications[0].options.body.includes("alpha") && notifications[0].options.body.includes("beta"));
+  assert.equal(notchStates.length, 1, "notch.setState auto-expands when granted");
+  assert.equal(notchStates[0].state, "expanded");
+  assert.equal(notchStates[0].options.durationMs, 8000);
+
+  notifications[0].onclick();
+  assert.equal(storage.get("nezha.tab"), "alerts");
+  assert.equal(notchGrant, true);
+});
+
+test("traffic pace warning renders projected usage on card and emits one silent notification", async t => {
+  const day10 = Date.parse("2026-11-11T00:00:00+08:00");
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: day10 });
+  let usedBytes = 200;
+  const { dashboard, notifications, notchStates } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    storage: { "nezha.tab": "traffic" },
+    capabilities: {
+      "notch.setState": true,
+      "notification.subtitle": true,
+      "notification.group": true,
+      "notification.silent": true,
+    },
+    fetchImpl: async url => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/api/v1/service") {
+        return response({
+          services: {},
+          cycle_transfer_stats: {
+            "1": {
+              name: "edge-monthly",
+              max: 1000,
+              from: "2026-11-01T00:00:00+08:00",
+              to: "2026-12-01T00:00:00+08:00",
+              server_name: { "1": "alpha" },
+              transfer: { "1": usedBytes },
+              next_update: { "1": "2026-11-11T00:10:00+08:00" },
+            },
+          },
+        });
+      }
+      return response(basicPayload(pathname));
+    },
+  });
+  const env = { inputs: { baseURL: "https://one.example.com" } };
+  await dashboard.scheduled(env);
+  assert.equal(notifications.length, 0);
+
+  usedBytes = 550; // 55% used at 33.3% elapsed -> projected ~165%
+  t.mock.timers.tick(35000);
+  await dashboard.scheduled(env);
+  await Promise.resolve();
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0].options.tag, "nezha-traffic-1:1-pace");
+  assert.equal(notifications[0].options.group, "nezha-traffic");
+  assert.equal(notifications[0].options.silent, true);
+  assert.equal(notchStates.length, 0, "low-priority pace warning should not force notch expansion");
+
+  const serialized = JSON.stringify(dashboard.render(env).panel);
+  assert.ok(serialized.includes("预计 165%"), "cycle card should display projected pace warning");
+});
+
+test("copy button flips to checkmark feedback and reverts after 1.5s", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1760000000000 });
+  const { dashboard, copied, toasts } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    fetchImpl: async url => response(basicPayload(new URL(url).pathname)),
+  });
+  const env = { inputs: { baseURL: "https://one.example.com" } };
+  await dashboard.scheduled(env);
+
+  const listPanel = dashboard.render(env).panel;
+  const serverCard = findNode(listPanel, n => n.props?.key === "srv-1");
+  serverCard.props.onClick();
+
+  const detailBefore = dashboard.render(env).panel;
+  const copyBtnBefore = findNode(detailBefore, n => n.props?.key === "detail-copy-1");
+  assert.equal(copyBtnBefore.props.tooltip, "复制");
+  copyBtnBefore.props.onClick();
+  await new Promise(r => setImmediate(r));
+  assert.equal(copied.length, 1);
+  assert.equal(toasts.length, 1);
+
+  const detailAfter = dashboard.render(env).panel;
+  const copyBtnAfter = findNode(detailAfter, n => n.props?.key === "detail-copy-1");
+  assert.equal(copyBtnAfter.props.tooltip, "已复制");
+  assert.ok(copyBtnAfter.children[0].props.tw.includes("text-[#10b981]"));
+
+  t.mock.timers.tick(1600);
+  const detailReverted = dashboard.render(env).panel;
+  const copyBtnReverted = findNode(detailReverted, n => n.props?.key === "detail-copy-1");
+  assert.equal(copyBtnReverted.props.tooltip, "复制");
+});
+
+test("Plus Inbox coalesces multi-message arrivals, silences info-only batches, and auto-expands notch on critical batches", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1760000000000 });
+  let messages = [
+    { inbox_id: "b1", seq: 1, source: "webhook", received_at: 1760000000, subject: "init" },
+  ];
+  const bodies = {
+    1: JSON.stringify({ title: "init", content: "ok" }),
+    2: JSON.stringify({ title: "节点已恢复 online", server: { name: "alpha" }, content: "alpha recovered" }),
+    3: JSON.stringify({ title: "节点已恢复 online", server: { name: "beta" }, content: "beta recovered" }),
+    4: JSON.stringify({ title: "服务器离线告警", server: { name: "gamma" }, content: "gamma offline" }),
+    5: JSON.stringify({ title: "CPU 严重告警", server: { name: "delta" }, content: "delta cpu 99%" }),
+  };
+  const { dashboard, notifications, notchStates } = loadDashboard({
+    secrets: { apiToken: "test-token" },
+    capabilities: {
+      "inbox.boxes": true,
+      "inbox.message": true,
+      "inbox.remove": true,
+      "notch.setState": true,
+      "notification.subtitle": true,
+      "notification.group": true,
+      "notification.silent": true,
+    },
+    inboxMock: {
+      async boxes() { return [{ id: "b1", name: "Nezha", address: "https://inbox.example/b1", paused: false, message_count: messages.length, last_received_at: 1760000000 }]; },
+      async list() { return messages; },
+      async read(_id, seq) { return new TextEncoder().encode(bodies[seq] || ""); },
+      async message() { return { subject: "", from: [], to: [], cc: [], text: "", attachments: [] }; },
+    },
+    fetchImpl: async url => response(basicPayload(new URL(url).pathname)),
+  });
+  const env = { inputs: { baseURL: "https://one.example.com" } };
+  await dashboard.scheduled(env);
+  assert.equal(notifications.length, 0);
+
+  // Batch 1: two info (recovered) alerts -> 1 silent notification, no notch auto-expand
+  messages = [
+    { inbox_id: "b1", seq: 3, source: "webhook", received_at: 1760000020 },
+    { inbox_id: "b1", seq: 2, source: "webhook", received_at: 1760000010 },
+    { inbox_id: "b1", seq: 1, source: "webhook", received_at: 1760000000, subject: "init" },
+  ];
+  await dashboard.event("inboxchange", { inboxIds: ["b1"] });
+  await Promise.resolve();
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0].options.tag, "nezha-inbox-batch");
+  assert.equal(notifications[0].options.group, "nezha-inbox");
+  assert.equal(notifications[0].options.silent, true);
+  assert.equal(notchStates.length, 0);
+
+  // Batch 2: two critical alerts -> 1 non-silent notification + notch auto-expand
+  messages = [
+    { inbox_id: "b1", seq: 5, source: "webhook", received_at: 1760000040 },
+    { inbox_id: "b1", seq: 4, source: "webhook", received_at: 1760000030 },
+    ...messages,
+  ];
+  await dashboard.event("inboxchange", { inboxIds: ["b1"] });
+  await Promise.resolve();
+  assert.equal(notifications.length, 2);
+  assert.equal(notifications[1].options.tag, "nezha-inbox-batch");
+  assert.equal(notifications[1].options.group, "nezha-inbox");
+  assert.equal(notifications[1].options.silent, undefined);
+  assert.equal(notchStates.length, 1);
+  assert.equal(notchStates[0].state, "expanded");
+});
+
+test("bar source declares zh-Hans locale for title, description, and docs", () => {
+  const raw = fs.readFileSync(new URL("./nezha.bar", import.meta.url), "utf8");
+  assert.match(raw, /<locale\s+lang="zh-Hans"[^>]*title="哪吒监控"/);
+  assert.match(raw, /<docs>[\s\S]*?<locale\s+lang="zh-Hans">/);
 });

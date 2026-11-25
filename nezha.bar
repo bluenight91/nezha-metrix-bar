@@ -3,7 +3,7 @@
      widget="true"
      notch="true"
      category="monitoring"
-     version="2.0.4"
+     version="2.1.0"
      icon="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNMjEuMSAwdjE4Ni4yTDE1Mi40IDI2OCA0NjMuOCA3OC42IDQ0MS43IDc3VjB6IiBzdHlsZT0iZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojMGE5NGYyIi8+PHBhdGggZD0iTTE2My45IDM3MCAyMS4xIDI3OS45djEyOC4zTDIzMC43IDUxMmwyMDkuNi0xMDMuOFYxNzUuOEw0OTEgOTMuM3oiIHN0eWxlPSJmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOiMwMzM4ZDYiLz48L3N2Zz4="
      description="Monitor Nezha servers, service probes, cycle traffic, and live alerts from your menu bar, notch, and desktop widgets."
      license="AGPL-3.0-only"
@@ -13,6 +13,10 @@
      refresh="5s"
      material="solid"
      window-style="standard">
+
+  <locale lang="zh-Hans"
+          title="哪吒监控"
+          description="在菜单栏、刘海屏和桌面小组件实时监控哪吒 V2 服务器、服务探测、周期流量与告警流。" />
 
   <permissions>
     <network origin="{{ inputs.baseURL }}" from-url="true" />
@@ -65,8 +69,8 @@
       <option value="online" label="Online Count (21/21)"><locale lang="zh-Hans" label="在线数（如 21/21）" /></option>
     </input>
     <input name="notchActivity" type="bool" label="Notch Alert Island" default="true"
-           help="Temporarily bring Nezha into the notch island when a server goes offline, a probe fails, cycle traffic crosses a threshold, or an Inbox alert arrives.">
-      <locale lang="zh-Hans" label="刘海屏告警动态岛" help="节点离线、探针异常、周期流量超限或收到 Inbox Webhook/邮件告警时，在刘海屏限时高亮提醒。" />
+           help="Temporarily bring Nezha into the notch island when a server goes offline, a probe fails, cycle traffic crosses a threshold, or an Inbox alert arrives. Enable 'Allow automatic notch expansion' in Display Settings to briefly auto-expand on critical alerts.">
+      <locale lang="zh-Hans" label="刘海屏告警动态岛" help="节点离线、探针异常、周期流量超限或收到 Inbox Webhook/邮件告警时，在刘海屏限时高亮提醒；在显示设置中开启「允许自动展开刘海屏」后，严重告警还会自动短时展开详情。" />
     </input>
     <input name="serverView" type="select" label="Server List Layout" default="auto"
            help="Choose cards, compact sortable table, or automatic (cards in compact flyout, sortable table with side-by-side detail in wide windows / standalone app).">
@@ -101,8 +105,8 @@
       <locale lang="zh-Hans" label="服务探测失败通知" />
     </input>
     <input name="trafficNotify" type="bool" label="Notify on Cycle Traffic Warning" default="true"
-           help="Notify when a cycle traffic quota crosses 80% or 95%.">
-      <locale lang="zh-Hans" label="周期流量预警通知" help="周期流量使用率首次达到 80% 或 95% 时发送提醒。" />
+           help="Notify when a cycle traffic quota crosses 80% / 95%, or when the current burn rate is projected to exhaust the quota before reset.">
+      <locale lang="zh-Hans" label="周期流量预警通知" help="周期流量使用率首次达到 80% / 95%，或按当前消耗速率预计在周期结束前耗尽时发送提醒。" />
     </input>
     <input name="maskServiceTargets" type="bool" label="Mask Service URLs &amp; IPs" default="false"
            help="Mask URLs, hostnames, and IP addresses shown in the Services tab for privacy or screenshots.">
@@ -110,18 +114,34 @@
     </input>
   </inputs>
 
-  <docs><![CDATA[连接哪吒监控 V2（Nezha Monitoring）面板，支持游客模式或 PAT 认证。本看板只读，不执行终端、文件管理或 MCP 写操作。
+  <docs>
+    <![CDATA[Connect to your Nezha Monitoring V2 dashboard via guest mode or a read-only Personal Access Token (PAT). This dashboard is strictly read-only and never runs terminal, file, or MCP write actions.
+
+Quick Setup
+1. Enter your Nezha Dashboard URL (for example https://mon.example.com). Trailing slashes and subpaths are normalized automatically.
+2. If your site enables force_auth or you want hidden servers and alert rules, create a read-only PAT (nzp_…) in Nezha Admin → Settings → API Tokens with nezha:inventory:read, nezha:server:read, nezha:service:read (and optionally nezha:alertrule:read), then paste it into API Token (PAT). Tokens are stored in your system credential store.
+
+Highlights
+- Menu Bar Rich Rendering (macOS): Choose stacked ↑↓ rates, rate + traffic sparkline, or cluster CPU + trend sparkline, and toggle the Nezha logo freely.
+- Unified Panel Width & Adaptive Layout: Pick Small (400px), Medium (460px), or Large (520px) flyout width; wide windows and standalone apps automatically switch to a sortable table + live detail split view.
+- Notch & Auto-Expand Alerts (Plus): Compact status on the wings, hover/click for cluster overview, timed alert highlights, and brief auto-expansion on critical alerts when "Allow automatic notch expansion" is enabled in Display Settings.
+- Grouped & Silent-Aware Alerts: Notifications include subtitles, macOS Notification Center grouping, batch coalescing on alert bursts, quiet delivery for low-priority warnings, and cycle traffic burn-rate projections.
+- Native Webhook / Email Alert Feed (Plus Inbox): Bind a Metrix.Bar Inbox to this dashboard and point Nezha's notification channel at it to receive every rule alert (even while your Mac sleeps).
+- Multi-Size Desktop Widgets: Small, Medium, and Large widgets supporting Fleet Overview, Single Server, Cycle Traffic, and Attention modes.]]>
+    <locale lang="zh-Hans"><![CDATA[连接哪吒监控 V2（Nezha Monitoring）面板，支持游客模式或 PAT 认证。本看板只读，不执行终端、文件管理或 MCP 写操作。
 
 快速配置
 1. 在「哪吒 Dashboard 地址」填写面板地址（如 https://mon.example.com），末尾斜杠或子路径会自动规范化。
 2. 如站点启用了 force_auth，或需要读取隐藏节点与告警规则，请在哪吒管理端「设置 → API Tokens」创建只读 PAT（nzp_…），勾选 nezha:inventory:read、nezha:server:read、nezha:service:read（可选 nezha:alertrule:read），填入「API Token（PAT）」。令牌仅保存在系统凭据库中。
 
-v2.0 亮点
+主要特性
 - 菜单栏富渲染（macOS）：在「菜单栏显示格式」中选择双行紧凑速率、双行速率 + 迷你流量图，或集群 CPU + 迷你趋势图；可通过「菜单栏显示 Logo」自由开关图标显示。
 - 统一面板宽度与自适应布局：提供「菜单栏面板宽度」小（400px）/ 中（460px）/ 大（520px）三档调节，搭配全宽等分标签栏与自适应分组胶囊栏；在宽窗口或独立 App（宽度 ≥ 860）下自动展开左侧可排序表格 + 右侧实时详情双栏视图。
-- 刘海屏与告警动态岛（Plus）：左右侧翼显示紧凑状态，悬停/点击展开集群概览，发生离线、探针异常、流量超限或 Inbox 告警时限时高亮提醒。
+- 刘海屏与告警自动展开（Plus）：左右侧翼显示紧凑状态，悬停/点击展开集群概览；发生离线、探针异常、流量预警或高优 Inbox 告警时限时高亮提醒，在显示设置中开启「允许自动展开刘海屏」后还可自动短时展开告警卡片。
+- 分组静音通知与流量速率预警：桌面通知支持副标题、macOS 通知分组、单次多条告警自动合并与低优先级静音推送；流量页支持双进度条与周期消耗速率超额预测。
 - 原生 Webhook / 邮件告警流（Plus 收件箱）：在 Metrix.Bar 创建收件箱并绑定到此实例，将哪吒通知渠道指向该地址，即可在「关注」页接收完整规则告警（含休眠期间）。
-- 多尺寸桌面小组件：支持小、中、大三种尺寸与总览 / 单机 / 周期流量 / 关注四种模式；在 Metrix.Bar 0.3+ 中可安装多个实例分别绑定不同模式或集群。]]></docs>
+- 多尺寸桌面小组件：支持小、中、大三种尺寸与总览 / 单机 / 周期流量 / 关注四种模式；支持安装多个实例分别绑定不同模式或集群。]]></locale>
+  </docs>
 
   <script apis="app localStorage notification shell websocket clipboard match-media"><![CDATA[
 const h = (type, props, ...children) => ({
@@ -521,6 +541,62 @@ function detectTrafficThresholds(previousLevels, cycleTransfers) {
     if (level > previous) crossed.push({ ...c, level });
   }
   return { nextLevels, crossed };
+}
+
+function computeCyclePace(cycle, nowMs = Date.now()) {
+  if (!cycle || typeof cycle !== "object") return null;
+  const timeInfo = computeCycleTimeProgress(cycle.from, cycle.to, nowMs);
+  if (!timeInfo || timeInfo.ended) return null;
+  const pct = Number(cycle.pct) || 0;
+  const timePct = timeInfo.timePct;
+  if (timePct < 10 || timePct >= 98 || pct <= 0) return null;
+  const projectedPct = (pct / timePct) * 100;
+  const aheadPct = pct - timePct;
+  const warning = pct >= 25 && pct < 100 && aheadPct >= 15 && projectedPct >= 110;
+  const used = Number(cycle.used) || 0;
+  const remaining = Number(cycle.remaining) || Math.max(0, (Number(cycle.max) || 0) - used);
+  let estExhaustMs = null;
+  if (pct < 100 && timeInfo.elapsedMs > 0 && used > 0 && remaining > 0) {
+    const ratePerMs = used / timeInfo.elapsedMs;
+    if (ratePerMs > 0) estExhaustMs = remaining / ratePerMs;
+  }
+  return {
+    warning,
+    projectedPct,
+    aheadPct,
+    timePct,
+    remainingMs: timeInfo.remainingMs,
+    estExhaustMs,
+  };
+}
+
+function detectTrafficPaceAlerts(previousWarned, cycleTransfers, nowMs = Date.now()) {
+  const prevSet = previousWarned instanceof Set ? previousWarned : new Set(Array.isArray(previousWarned) ? previousWarned : []);
+  const nextWarned = new Set();
+  const triggered = [];
+  for (const c of Array.isArray(cycleTransfers) ? cycleTransfers : []) {
+    const pace = computeCyclePace(c, nowMs);
+    if (pace && pace.warning) {
+      nextWarned.add(c.id);
+      if (!prevSet.has(c.id) && (Number(c.pct) || 0) < 80) {
+        triggered.push({ ...c, pace });
+      }
+    }
+  }
+  return { nextWarned, triggered };
+}
+
+function buildBatchNotificationSummary(names, locale = "zh", maxItems = 3) {
+  const list = (Array.isArray(names) ? names : [])
+    .map(n => String(n || "").trim())
+    .filter(Boolean);
+  if (!list.length) return "";
+  const limit = Math.max(1, Number(maxItems) || 3);
+  const isZh = locale !== "en";
+  const sep = isZh ? "、" : ", ";
+  if (list.length <= limit) return list.join(sep);
+  const shown = list.slice(0, limit).join(sep);
+  return isZh ? `${shown} 等 ${list.length} 项` : `${shown} +${list.length - limit} more`;
 }
 
 function filterServers(list, query) {
@@ -1087,6 +1163,10 @@ function resolveOutputDemand(raw) {
 
 function parseNotificationTarget(tag) {
   const s = String(tag || "");
+  if (s === "nezha-off-batch") return { tab: "alerts" };
+  if (s === "nezha-probe-batch") return { tab: "services" };
+  if (s === "nezha-traffic-batch") return { tab: "traffic" };
+  if (s === "nezha-inbox-batch") return { tab: "alerts" };
   if (s.startsWith("nezha-off-")) return { tab: "servers", serverId: s.slice(10) };
   if (s.startsWith("nezha-probe-")) return { tab: "services", serviceId: s.slice(12) };
   if (s.startsWith("nezha-traffic-")) {
@@ -1277,6 +1357,7 @@ const I18N = {
     load: "负载",
     back: "返回",
     copy: "复制",
+    copiedShort: "已复制",
     copied: "已复制到剪贴板",
     period1d: "1天",
     period7d: "7天",
@@ -1325,8 +1406,14 @@ const I18N = {
     offlineAlertBody: n => `${n} 已离线`,
     probeAlertTitle: "哪吒 · 探测失败",
     probeAlertBody: n => `${n} 当前失败`,
+    probeBatchSub: n => `${n} 项探测失败`,
     trafficAlertTitle: "哪吒 · 周期流量提醒",
+    trafficBatchSub: n => `${n} 项周期流量预警`,
+    trafficPaceTitle: "哪吒 · 流量消耗偏快",
+    trafficPaceBody: (srv, cyc, pct) => `${srv} · ${cyc} 按当前速率预计使用 ${pct}%`,
+    trafficPaceHint: pct => `预计 ${pct}% · 可能提前耗尽`,
     inboxAlertTitle: "哪吒 · 告警推送",
+    inboxBatchSub: n => `收到 ${n} 条新告警`,
     clearWatch: "清空关注",
     downRate: "下行",
     upRate: "上行",
@@ -1407,6 +1494,7 @@ const I18N = {
     load: "Load",
     back: "Back",
     copy: "Copy",
+    copiedShort: "Copied",
     copied: "Copied to clipboard",
     period1d: "1d",
     period7d: "7d",
@@ -1455,8 +1543,14 @@ const I18N = {
     offlineAlertBody: n => `${n} went offline`,
     probeAlertTitle: "Nezha · Probe down",
     probeAlertBody: n => `${n} is failing`,
+    probeBatchSub: n => `${n} probes failing`,
     trafficAlertTitle: "Nezha · Cycle traffic",
+    trafficBatchSub: n => `${n} cycle traffic alerts`,
+    trafficPaceTitle: "Nezha · Traffic pace",
+    trafficPaceBody: (srv, cyc, pct) => `${srv} · ${cyc} projected to reach ${pct}% before reset`,
+    trafficPaceHint: pct => `Projected ${pct}% · may exhaust early`,
     inboxAlertTitle: "Nezha · Alert",
+    inboxBatchSub: n => `${n} new alerts`,
     clearWatch: "Clear watchlist",
     downRate: "Down",
     upRate: "Up",
@@ -1560,6 +1654,9 @@ try {
 let prevOnline = new Set();
 let prevFailing = new Set();
 let prevTrafficLevels = new Map();
+let prevTrafficPaceWarned = new Set();
+let copiedKey = "";
+let copiedTimer = null;
 let hadSnapshot = false;
 let hadServiceSnapshot = false;
 let ws = null;
@@ -1578,6 +1675,10 @@ const caps = {
   trayIconClear: false,
   notch: null,
   notchActivity: null,
+  notchSetState: false,
+  notifSubtitle: null,
+  notifGroup: null,
+  notifSilent: null,
   widgetChart: true,
   inboxBoxes: false,
   inboxMessage: false,
@@ -1617,12 +1718,16 @@ async function probeCapabilities() {
   const probe = async name => {
     try { return Boolean(await $metrix.caniuse(name)); } catch { return false; }
   };
-  const [tc, tci, tic, notch, na, wc, ib, im, ir] = await Promise.all([
+  const [tc, tci, tic, notch, na, ns, nsub, ngrp, nsil, wc, ib, im, ir] = await Promise.all([
     probe("render.tray.content"),
     probe("render.tray.content.icon"),
     probe("render.tray.icon.clear"),
     probe("render.notch"),
     probe("render.notch.activity"),
+    probe("notch.setState"),
+    probe("notification.subtitle"),
+    probe("notification.group"),
+    probe("notification.silent"),
     probe("render.widget.chart"),
     probe("inbox.boxes"),
     probe("inbox.message"),
@@ -1633,6 +1738,10 @@ async function probeCapabilities() {
   caps.trayIconClear = tic;
   caps.notch = notch;
   caps.notchActivity = na;
+  caps.notchSetState = ns;
+  caps.notifSubtitle = nsub;
+  caps.notifGroup = ngrp;
+  caps.notifSilent = nsil;
   caps.widgetChart = wc;
   caps.inboxBoxes = ib;
   caps.inboxMessage = im;
@@ -1667,13 +1776,32 @@ async function detectHostLocale() {
   } catch { locale = "zh"; }
 }
 
-function triggerNotchActivity(id, durationMs = 300000, persistentAttention = false) {
+async function maybeAutoExpandNotch(durationMs = 8000) {
+  if (!notchActivityEnabled) return;
+  if (!$metrix || !$metrix.notch || typeof $metrix.notch.setState !== "function") return;
+  try {
+    if (typeof $metrix.caniuse === "function") {
+      const granted = await $metrix.caniuse("notch.setState");
+      caps.notchSetState = Boolean(granted);
+      if (!granted) return;
+    } else if (!caps.notchSetState) {
+      return;
+    }
+    const ms = Math.max(1000, Math.min(30000, Math.round(Number(durationMs) || 8000)));
+    await $metrix.notch.setState("expanded", { durationMs: ms });
+  } catch {}
+}
+
+function triggerNotchActivity(id, durationMs = 300000, persistentAttention = false, autoExpandMs = 0) {
   if (!notchActivityEnabled) return;
   activeNotchActivity = {
     id: String(id),
     expiresAt: Date.now() + durationMs,
     persistentAttention,
   };
+  if (autoExpandMs > 0) {
+    void maybeAutoExpandNotch(autoExpandMs);
+  }
 }
 
 function handleNotificationClick(tag) {
@@ -1699,14 +1827,18 @@ function handleNotificationClick(tag) {
   $metrix.invalidate();
 }
 
-function sendNotification(title, body, tag) {
+function sendNotification(title, body, tag, options = {}) {
   try {
-    const n = new Notification(title, { body, tag });
+    const opts = { body: String(body || ""), tag: String(tag || "") };
+    if (options && options.subtitle && caps.notifSubtitle !== false) opts.subtitle = String(options.subtitle);
+    if (options && options.group && caps.notifGroup !== false) opts.group = String(options.group);
+    if (options && options.silent && caps.notifSilent !== false) opts.silent = true;
+    const n = new Notification(title, opts);
     if (n) n.onclick = () => handleNotificationClick(tag);
   } catch {}
 }
 
-async function copyText(text) {
+async function copyText(text, key = "") {
   const value = String(text || "");
   if (!value) return;
   try {
@@ -1716,6 +1848,19 @@ async function copyText(text) {
       } else if (typeof navigator.clipboard.write === "function" && typeof ClipboardItem !== "undefined" && typeof Blob !== "undefined") {
         await navigator.clipboard.write([new ClipboardItem({ "text/plain": new Blob([value], { type: "text/plain" }) })]);
       }
+    }
+    if (key) {
+      const k = String(key);
+      copiedKey = k;
+      if (copiedTimer) clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => {
+        if (copiedKey === k) {
+          copiedKey = "";
+          copiedTimer = null;
+          $metrix.invalidate();
+        }
+      }, 1500);
+      $metrix.invalidate();
     }
     try { $metrix.toast(T().copied); } catch {}
   } catch {}
@@ -1750,6 +1895,9 @@ function resetConnectionState() {
   prevOnline = new Set();
   prevFailing = new Set();
   prevTrafficLevels = new Map();
+  prevTrafficPaceWarned = new Set();
+  copiedKey = "";
+  if (copiedTimer) { clearTimeout(copiedTimer); copiedTimer = null; }
   hadSnapshot = false;
   hadServiceSnapshot = false;
   loadedAt = 0;
@@ -2004,20 +2152,55 @@ async function refreshServices() {
     if (overviewOk) lastServiceOverview = overviewRes.value || { services: {} };
     serviceRows = mergeServiceRows(lastServiceList || [], lastServiceOverview || { services: {} });
     if (overviewOk) {
+      const now = Date.now();
       cycleTransfers = buildCycleTransfers(lastServiceOverview);
       const traffic = detectTrafficThresholds(prevTrafficLevels, cycleTransfers);
+      const pace = detectTrafficPaceAlerts(prevTrafficPaceWarned, cycleTransfers, now);
       if (hadServiceSnapshot && trafficNotify) {
-        for (const c of traffic.crossed) {
+        const t = T();
+        if (traffic.crossed.length === 1) {
+          const c = traffic.crossed[0];
           const tag = `nezha-traffic-${c.id}-${c.level}`;
+          const isCritical = c.level >= 2;
           sendNotification(
-            T().trafficAlertTitle,
+            t.trafficAlertTitle,
             `${c.serverName} · ${c.cycle} · ${c.pct.toFixed(1)}%`,
-            tag
+            tag,
+            { subtitle: `${c.serverName} · ${c.cycle}`, group: "nezha-traffic", silent: !isCritical }
           );
-          triggerNotchActivity(tag, 300000, true);
+          triggerNotchActivity(tag, 300000, true, isCritical ? 8000 : 0);
+        } else if (traffic.crossed.length > 1) {
+          const hasCritical = traffic.crossed.some(c => c.level >= 2);
+          const names = traffic.crossed.map(c => `${c.serverName} (${c.pct.toFixed(0)}%)`);
+          sendNotification(
+            t.trafficAlertTitle,
+            buildBatchNotificationSummary(names, locale),
+            "nezha-traffic-batch",
+            { subtitle: t.trafficBatchSub(traffic.crossed.length), group: "nezha-traffic", silent: !hasCritical }
+          );
+          triggerNotchActivity(`nezha-traffic-batch-${now}`, 300000, true, hasCritical ? 8000 : 0);
+        }
+        if (pace.triggered.length === 1) {
+          const c = pace.triggered[0];
+          const tag = `nezha-traffic-${c.id}-pace`;
+          sendNotification(
+            t.trafficPaceTitle,
+            t.trafficPaceBody(c.serverName, c.cycle, Math.round(c.pace.projectedPct)),
+            tag,
+            { subtitle: `${c.serverName} · ${c.cycle}`, group: "nezha-traffic", silent: true }
+          );
+        } else if (pace.triggered.length > 1) {
+          const names = pace.triggered.map(c => `${c.serverName} (~${Math.round(c.pace.projectedPct)}%)`);
+          sendNotification(
+            t.trafficPaceTitle,
+            buildBatchNotificationSummary(names, locale),
+            "nezha-traffic-batch",
+            { subtitle: t.trafficBatchSub(pace.triggered.length), group: "nezha-traffic", silent: true }
+          );
         }
       }
       prevTrafficLevels = traffic.nextLevels;
+      prevTrafficPaceWarned = pace.nextWarned;
     }
     lastServiceRefresh = Date.now();
     maybeNotify();
@@ -2119,6 +2302,7 @@ async function refreshInbox(changedIds = null) {
       const arrived = trackInboxArrival(inboxStore.boxes, box.id, list);
       saveInboxStore();
       const arrivedSeqs = new Set(arrived.map(m => Number(m.seq)));
+      const arrivedParsed = [];
       let hydratedWebhooks = 0;
       for (const entry of list) {
         const key = `${entry.inbox_id}:${entry.seq}`;
@@ -2138,14 +2322,30 @@ async function refreshInbox(changedIds = null) {
         }
         collected.push(parsed);
         if (arrivedSeqs.has(Number(entry.seq))) {
-          const tag = `nezha-inbox-${parsed.key}`;
-          sendNotification(
-            parsed.serverName ? `${T().inboxAlertTitle} · ${parsed.serverName}` : T().inboxAlertTitle,
-            `${parsed.title}${parsed.body ? `\n${parsed.body.slice(0, 140)}` : ""}`,
-            tag
-          );
-          triggerNotchActivity(tag, 20000, false);
+          arrivedParsed.push(parsed);
         }
+      }
+      if (arrivedParsed.length === 1) {
+        const parsed = arrivedParsed[0];
+        const tag = `nezha-inbox-${parsed.key}`;
+        const isInfo = parsed.severity === "info";
+        sendNotification(
+          parsed.serverName ? `${T().inboxAlertTitle} · ${parsed.serverName}` : T().inboxAlertTitle,
+          `${parsed.title}${parsed.body ? `\n${parsed.body.slice(0, 140)}` : ""}`,
+          tag,
+          { subtitle: parsed.serverName || (parsed.source === "email" ? "Email" : "Webhook"), group: "nezha-inbox", silent: isInfo }
+        );
+        triggerNotchActivity(tag, 20000, false, isInfo ? 0 : 8000);
+      } else if (arrivedParsed.length > 1) {
+        const allInfo = arrivedParsed.every(a => a.severity === "info");
+        const names = arrivedParsed.map(a => (a.serverName ? `${a.serverName}: ${a.title}` : a.title));
+        sendNotification(
+          T().inboxAlertTitle,
+          buildBatchNotificationSummary(names, locale),
+          "nezha-inbox-batch",
+          { subtitle: T().inboxBatchSub(arrivedParsed.length), group: "nezha-inbox", silent: allInfo }
+        );
+        triggerNotchActivity(`nezha-inbox-batch-${Date.now()}`, 20000, false, allInfo ? 0 : 8000);
       }
     }
     collected.sort((a, b) => (b.receivedAt - a.receivedAt) || (b.seq - a.seq));
@@ -2259,11 +2459,22 @@ function maybeNotify() {
   }
   if (hadSnapshot && offlineNotify) {
     const { wentOffline } = detectTransitions(prevOnline, nextOnline);
-    for (const id of wentOffline) {
+    if (wentOffline.length === 1) {
+      const id = wentOffline[0];
       const s = servers.get(id);
+      const name = (s && s.name) || id;
       const tag = `nezha-off-${id}`;
-      sendNotification(t.offlineAlertTitle, t.offlineAlertBody(s && s.name || id), tag);
-      triggerNotchActivity(tag, 300000, true);
+      sendNotification(t.offlineAlertTitle, t.offlineAlertBody(name), tag, { subtitle: name, group: "nezha-offline" });
+      triggerNotchActivity(tag, 300000, true, 8000);
+    } else if (wentOffline.length > 1) {
+      const names = wentOffline.map(id => (servers.get(id) && servers.get(id).name) || id);
+      sendNotification(
+        t.offlineAlertTitle,
+        buildBatchNotificationSummary(names, locale),
+        "nezha-off-batch",
+        { subtitle: t.offlineCount(wentOffline.length), group: "nezha-offline" }
+      );
+      triggerNotchActivity(`nezha-off-batch-${now}`, 300000, true, 8000);
     }
   }
   prevOnline = nextOnline;
@@ -2272,13 +2483,29 @@ function maybeNotify() {
     if (svc.failing) nextFail.add(String(svc.id));
   }
   if (hadServiceSnapshot && probeNotify) {
+    const newlyFailing = [];
     for (const id of nextFail) {
-      if (!prevFailing.has(id)) {
+      if (!prevFailing.has(id)) newlyFailing.push(id);
+    }
+    if (newlyFailing.length === 1) {
+      const id = newlyFailing[0];
+      const svc = serviceRows.find(x => String(x.id) === id);
+      const name = (svc && svc.name) || id;
+      const tag = `nezha-probe-${id}`;
+      sendNotification(t.probeAlertTitle, t.probeAlertBody(name), tag, { subtitle: name, group: "nezha-probe" });
+      triggerNotchActivity(tag, 300000, true, 8000);
+    } else if (newlyFailing.length > 1) {
+      const names = newlyFailing.map(id => {
         const svc = serviceRows.find(x => String(x.id) === id);
-        const tag = `nezha-probe-${id}`;
-        sendNotification(t.probeAlertTitle, t.probeAlertBody(svc && svc.name || id), tag);
-        triggerNotchActivity(tag, 300000, true);
-      }
+        return (svc && svc.name) || id;
+      });
+      sendNotification(
+        t.probeAlertTitle,
+        buildBatchNotificationSummary(names, locale),
+        "nezha-probe-batch",
+        { subtitle: t.probeBatchSub(newlyFailing.length), group: "nezha-probe" }
+      );
+      triggerNotchActivity(`nezha-probe-batch-${now}`, 300000, true, 8000);
     }
   }
   prevFailing = nextFail;
@@ -2450,7 +2677,7 @@ function totalAlertBadgeCount() {
   return attn.length + unreadInboxCount();
 }
 
-function iconActionBtn({ key, svg, onClick, disabled, tooltip, active = false, busy = false }) {
+function iconActionBtn({ key, svg, onClick, disabled, tooltip, active = false, activeColor = "[#0a94f2]", busy = false }) {
   return h("Column", {
     key,
     ...(disabled || !onClick ? {} : { onClick }),
@@ -2459,7 +2686,7 @@ function iconActionBtn({ key, svg, onClick, disabled, tooltip, active = false, b
   },
     h("Icon", {
       svg,
-      tw: `size-[14px] ${active ? "text-[#0a94f2]" : "text-textMuted"}`,
+      tw: `size-[14px] ${active ? `text-${activeColor}` : "text-textMuted"}`,
       ...(busy ? {
         keyframes: {
           duration: 900,
@@ -3217,9 +3444,11 @@ function serverDetailBody(s) {
     }),
     iconActionBtn({
       key: `detail-copy-${id}`,
-      svg: ICONS.copy,
-      tooltip: t.copy,
-      onClick: () => { void copyText(formatServerSummaryText(s)); },
+      svg: copiedKey === `detail-${id}` ? ICONS.check : ICONS.copy,
+      active: copiedKey === `detail-${id}`,
+      activeColor: "[#10b981]",
+      tooltip: copiedKey === `detail-${id}` ? t.copiedShort : t.copy,
+      onClick: () => { void copyText(formatServerSummaryText(s), `detail-${id}`); },
     }),
     CompactToggle(
       periodItems,
@@ -3542,10 +3771,19 @@ function servicesPanel(viewportWidth = 0) {
 function cycleCard(c) {
   const t = T();
   const compact = isCompactFlyout();
-  const barColor = c.pct >= 95 ? PAL.red : c.pct >= 80 ? PAL.amber : PAL.emerald;
+  const now = Date.now();
+  const timeInfo = computeCycleTimeProgress(c.from, c.to, now);
+  const pace = computeCyclePace(c, now);
+  const paceWarn = Boolean(pace && pace.warning);
+  const barColor = c.pct >= 95 ? PAL.red : (c.pct >= 80 || paceWarn) ? PAL.amber : PAL.emerald;
   const timeBarColor = isDarkTheme() ? "#64748b" : "#94a3b8";
-  const borderCls = c.pct >= 95 ? "border-[#ef444466]" : c.pct >= 80 ? "border-[#f59e0b66]" : `border-${cardBorder()}`;
-  const timeInfo = computeCycleTimeProgress(c.from, c.to, Date.now());
+  const borderCls = c.pct >= 95
+    ? "border-[#ef444466]"
+    : c.pct >= 80
+      ? "border-[#f59e0b66]"
+      : paceWarn
+        ? "border-[#f59e0b44]"
+        : `border-${cardBorder()}`;
   const rangeText = formatCycleRange(c.from, c.to);
   const remainText = timeInfo ? formatCycleRemaining(timeInfo.remainingMs, locale) : "";
   return h(
@@ -3572,6 +3810,9 @@ function cycleCard(c) {
       capsuleBar(c.pct, barColor, "h-[4px]"),
       timeInfo ? capsuleBar(timeInfo.timePct, timeBarColor, "h-[2.5px]") : null
     ),
+    paceWarn
+      ? TX(t.trafficPaceHint(Math.round(pace.projectedPct)), { tw: "text-[9.5px] font-medium text-[#f59e0b] truncate" })
+      : null,
     (rangeText || remainText)
       ? h("Row", { tw: "items-center gap-1.5 w-full" },
           rangeText ? TX(rangeText, { tw: "text-[9.5px] tabular-nums text-textMuted truncate min-w-0" }) : null,
@@ -3682,7 +3923,11 @@ function inboxAlertCard(alert) {
       h("Row", { tw: "items-center gap-2 w-full" },
         alert.sender ? TX(alert.sender, { tw: "text-[9.5px] text-textMuted truncate" }) : null,
         h("Spacer"),
-        h("Button", { text: t.copy, tw: "text-[10px]", onClick: () => { void copyText(`${alert.title}\n${alert.body || ""}`.trim()); } }),
+        h("Button", {
+          text: copiedKey === `inbox-${alert.key}` ? `✓ ${t.copiedShort}` : t.copy,
+          tw: copiedKey === `inbox-${alert.key}` ? "text-[10px] text-[#10b981]" : "text-[10px]",
+          onClick: () => { void copyText(`${alert.title}\n${alert.body || ""}`.trim(), `inbox-${alert.key}`); },
+        }),
         h("Button", { text: unread ? t.markRead : t.markUnread, tw: "text-[10px]", onClick: () => toggleInboxRead(alert) }),
         caps.inboxRemove ? h("Button", { text: t.deleteBtn, tw: "text-[10px] text-[#ef4444]", onClick: () => { void deleteInboxMessage(alert); } }) : null
       )
@@ -4108,7 +4353,7 @@ function notchKpiCard(key, label, value, hexColor, sparkKey, valueHex = "#ffffff
   return h("Column", {
     key,
     tw: "grow basis-0 min-w-0 rounded-[10px] border border-[#ffffff16] px-2.5 py-2 gap-1",
-    linearGradient: { direction: "vertical", colors: [`${hexColor}1a`, "#ffffff08"] },
+    linearGradient: { from: `${hexColor}1a`, to: "#ffffff08", angle: 180 },
   },
     TX(label, { tw: "text-[10px] font-medium text-[#ffffff80] truncate" }),
     TX(value, { tw: `text-[14px] font-bold tabular-nums leading-tight truncate text-[${valueHex}]` }),

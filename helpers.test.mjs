@@ -38,6 +38,9 @@ import {
   formatRelativeTime,
   filterServers,
   detectTrafficThresholds,
+  computeCyclePace,
+  detectTrafficPaceAlerts,
+  buildBatchNotificationSummary,
   resolveWidgetServer,
   pushFleetSample,
   buildSparkPoints,
@@ -625,6 +628,10 @@ test("parseNotificationTarget maps notification tags to panel navigation targets
   assert.deepEqual(parseNotificationTarget("nezha-probe-9"), { tab: "services", serviceId: "9" });
   assert.deepEqual(parseNotificationTarget("nezha-traffic-5:1-2"), { tab: "servers", serverId: "5" });
   assert.deepEqual(parseNotificationTarget("nezha-inbox-box1:42"), { tab: "alerts", inboxKey: "box1:42" });
+  assert.deepEqual(parseNotificationTarget("nezha-off-batch"), { tab: "alerts" });
+  assert.deepEqual(parseNotificationTarget("nezha-probe-batch"), { tab: "services" });
+  assert.deepEqual(parseNotificationTarget("nezha-traffic-batch"), { tab: "traffic" });
+  assert.deepEqual(parseNotificationTarget("nezha-inbox-batch"), { tab: "alerts" });
 });
 
 test("parseInboxAlert extracts structured Nezha webhook JSON and email alerts", () => {
@@ -803,4 +810,62 @@ test("shouldUseFullDetailHeight expands rich detail views and auto-fits compact 
   assert.equal(shouldUseFullDetailHeight({ tab: "online", dailyCount: 7 }), true);
   assert.equal(shouldUseFullDetailHeight({ tab: "online", dailyCount: 30 }), true);
   assert.equal(shouldUseFullDetailHeight({ tab: "online", dailyCount: 1 }), false);
+});
+
+test("computeCyclePace flags cycles burning significantly faster than elapsed time", () => {
+  const from = "2026-11-01T00:00:00Z";
+  const to = "2026-12-01T00:00:00Z";
+  const day10 = Date.parse("2026-11-11T00:00:00Z"); // ~33.3% elapsed
+  const day2 = Date.parse("2026-11-03T00:00:00Z"); // ~6.7% elapsed (<10% guard)
+
+  const fast = computeCyclePace({ from, to, pct: 55, used: 550, max: 1000, remaining: 450 }, day10);
+  assert.equal(fast.warning, true);
+  assert.ok(Math.abs(fast.projectedPct - 165) < 0.2);
+  assert.ok(fast.estExhaustMs > 0);
+
+  const normal = computeCyclePace({ from, to, pct: 36, used: 360, max: 1000, remaining: 640 }, day10);
+  assert.equal(normal.warning, false);
+
+  const early = computeCyclePace({ from, to, pct: 40, used: 400, max: 1000, remaining: 600 }, day2);
+  assert.equal(early, null, "cycles under 10% elapsed should not false-alarm");
+
+  const alreadyFull = computeCyclePace({ from, to, pct: 100, used: 1000, max: 1000, remaining: 0 }, day10);
+  assert.equal(alreadyFull.warning, false);
+
+  const ended = computeCyclePace({ from, to, pct: 60, used: 600, max: 1000, remaining: 400 }, Date.parse("2026-12-02T00:00:00Z"));
+  assert.equal(ended, null);
+});
+
+test("detectTrafficPaceAlerts triggers once below 80% and resets after recovery", () => {
+  const from = "2026-11-01T00:00:00Z";
+  const to = "2026-12-01T00:00:00Z";
+  const day10 = Date.parse("2026-11-11T00:00:00Z");
+
+  const step1 = detectTrafficPaceAlerts(new Set(), [
+    { id: "1:1", serverName: "alpha", cycle: "monthly", from, to, pct: 55, used: 550, max: 1000, remaining: 450 },
+    { id: "1:2", serverName: "beta", cycle: "monthly", from, to, pct: 85, used: 850, max: 1000, remaining: 150 },
+  ], day10);
+  assert.deepEqual(step1.triggered.map(x => x.id), ["1:1"], "skips >=80% already covered by threshold alerts");
+
+  const step2 = detectTrafficPaceAlerts(step1.nextWarned, [
+    { id: "1:1", serverName: "alpha", cycle: "monthly", from, to, pct: 60, used: 600, max: 1000, remaining: 400 },
+  ], day10);
+  assert.equal(step2.triggered.length, 0, "does not repeat while still warned");
+
+  const step3 = detectTrafficPaceAlerts(step2.nextWarned, [
+    { id: "1:1", serverName: "alpha", cycle: "monthly", from, to, pct: 35, used: 350, max: 1000, remaining: 650 },
+  ], day10);
+  assert.equal(step3.nextWarned.size, 0);
+
+  const step4 = detectTrafficPaceAlerts(step3.nextWarned, [
+    { id: "1:1", serverName: "alpha", cycle: "monthly", from, to, pct: 56, used: 560, max: 1000, remaining: 440 },
+  ], day10);
+  assert.deepEqual(step4.triggered.map(x => x.id), ["1:1"]);
+});
+
+test("buildBatchNotificationSummary formats concise zh and en summaries", () => {
+  assert.equal(buildBatchNotificationSummary(["alpha", "beta"], "zh"), "alpha、beta");
+  assert.equal(buildBatchNotificationSummary(["alpha", "beta", "gamma", "delta"], "zh"), "alpha、beta、gamma 等 4 项");
+  assert.equal(buildBatchNotificationSummary(["alpha", "beta", "gamma", "delta"], "en"), "alpha, beta, gamma +1 more");
+  assert.equal(buildBatchNotificationSummary([], "zh"), "");
 });

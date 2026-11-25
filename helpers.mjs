@@ -336,6 +336,62 @@ export function detectTrafficThresholds(previousLevels, cycleTransfers) {
   return { nextLevels, crossed };
 }
 
+export function computeCyclePace(cycle, nowMs = Date.now()) {
+  if (!cycle || typeof cycle !== "object") return null;
+  const timeInfo = computeCycleTimeProgress(cycle.from, cycle.to, nowMs);
+  if (!timeInfo || timeInfo.ended) return null;
+  const pct = Number(cycle.pct) || 0;
+  const timePct = timeInfo.timePct;
+  if (timePct < 10 || timePct >= 98 || pct <= 0) return null;
+  const projectedPct = (pct / timePct) * 100;
+  const aheadPct = pct - timePct;
+  const warning = pct >= 25 && pct < 100 && aheadPct >= 15 && projectedPct >= 110;
+  const used = Number(cycle.used) || 0;
+  const remaining = Number(cycle.remaining) || Math.max(0, (Number(cycle.max) || 0) - used);
+  let estExhaustMs = null;
+  if (pct < 100 && timeInfo.elapsedMs > 0 && used > 0 && remaining > 0) {
+    const ratePerMs = used / timeInfo.elapsedMs;
+    if (ratePerMs > 0) estExhaustMs = remaining / ratePerMs;
+  }
+  return {
+    warning,
+    projectedPct,
+    aheadPct,
+    timePct,
+    remainingMs: timeInfo.remainingMs,
+    estExhaustMs,
+  };
+}
+
+export function detectTrafficPaceAlerts(previousWarned, cycleTransfers, nowMs = Date.now()) {
+  const prevSet = previousWarned instanceof Set ? previousWarned : new Set(Array.isArray(previousWarned) ? previousWarned : []);
+  const nextWarned = new Set();
+  const triggered = [];
+  for (const c of Array.isArray(cycleTransfers) ? cycleTransfers : []) {
+    const pace = computeCyclePace(c, nowMs);
+    if (pace && pace.warning) {
+      nextWarned.add(c.id);
+      if (!prevSet.has(c.id) && (Number(c.pct) || 0) < 80) {
+        triggered.push({ ...c, pace });
+      }
+    }
+  }
+  return { nextWarned, triggered };
+}
+
+export function buildBatchNotificationSummary(names, locale = "zh", maxItems = 3) {
+  const list = (Array.isArray(names) ? names : [])
+    .map(n => String(n || "").trim())
+    .filter(Boolean);
+  if (!list.length) return "";
+  const limit = Math.max(1, Number(maxItems) || 3);
+  const isZh = locale !== "en";
+  const sep = isZh ? "、" : ", ";
+  if (list.length <= limit) return list.join(sep);
+  const shown = list.slice(0, limit).join(sep);
+  return isZh ? `${shown} 等 ${list.length} 项` : `${shown} +${list.length - limit} more`;
+}
+
 export function filterServers(list, query) {
   const q = String(query || "").trim().toLowerCase();
   if (!q) return list;
@@ -895,6 +951,10 @@ export function resolveOutputDemand(raw) {
 
 export function parseNotificationTarget(tag) {
   const s = String(tag || "");
+  if (s === "nezha-off-batch") return { tab: "alerts" };
+  if (s === "nezha-probe-batch") return { tab: "services" };
+  if (s === "nezha-traffic-batch") return { tab: "traffic" };
+  if (s === "nezha-inbox-batch") return { tab: "alerts" };
   if (s.startsWith("nezha-off-")) return { tab: "servers", serverId: s.slice(10) };
   if (s.startsWith("nezha-probe-")) return { tab: "services", serviceId: s.slice(12) };
   if (s.startsWith("nezha-traffic-")) {
