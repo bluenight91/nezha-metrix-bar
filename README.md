@@ -16,13 +16,17 @@
 | --- | --- |
 | ![Detail Overview](assets/detail.png) | ![Detail Network](assets/detail-network.png) |
 
-| Services（服务探测 · 支持目标打码） | Traffic（周期流量与剩余配额） |
+| Services（服务探测 · 支持目标打码） | Traffic（双进度条对比 · 消耗速率预测） |
 | --- | --- |
 | ![Services](assets/services.png) | ![Traffic](assets/traffic.png) |
 
 | Alerts（关注事项 + Plus Inbox 告警） | Servers（紧凑可排序表格视图） |
 | --- | --- |
 | ![Alerts](assets/alerts.png) | ![Servers Table](assets/servers-table.png) |
+
+| Notch（Plus · 刘海屏展开卡片） | Desktop Widget（大尺寸全局总览） |
+| --- | --- |
+| ![Notch Expanded](assets/notch.png) | ![Desktop Widget](assets/widget.png) |
 
 面板宽度支持 400px / 460px / 520px 三档统一调节，高度会随条目数自适应收缩，内容较多时可滚动。
 
