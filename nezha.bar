@@ -2,8 +2,9 @@
      min-app-version="0.3.0"
      widget="true"
      notch="true"
+     keep-alive="true"
      category="monitoring"
-     version="2.1.0"
+     version="2.1.1"
      icon="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNMjEuMSAwdjE4Ni4yTDE1Mi40IDI2OCA0NjMuOCA3OC42IDQ0MS43IDc3VjB6IiBzdHlsZT0iZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojMGE5NGYyIi8+PHBhdGggZD0iTTE2My45IDM3MCAyMS4xIDI3OS45djEyOC4zTDIzMC43IDUxMmwyMDkuNi0xMDMuOFYxNzUuOEw0OTEgOTMuM3oiIHN0eWxlPSJmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOiMwMzM4ZDYiLz48L3N2Zz4="
      description="Monitor Nezha servers, service probes, cycle traffic, and live alerts from your menu bar, notch, and desktop widgets."
      license="AGPL-3.0-only"
@@ -17,6 +18,9 @@
   <locale lang="zh-Hans"
           title="哪吒监控"
           description="在菜单栏、刘海屏和桌面小组件实时监控哪吒 V2 服务器、服务探测、周期流量与告警流。" />
+  <locale lang="zh-Hant"
+          title="哪吒監控"
+          description="在選單列、瀏海屏與桌面小工具即時監控哪吒 V2 伺服器、服務探測、週期流量與告警流。" />
 
   <permissions>
     <network origin="{{ inputs.baseURL }}" from-url="true" />
@@ -27,90 +31,106 @@
     <input name="baseURL" type="string" label="Nezha Dashboard URL" placeholder="https://nezha.example.com" required="true"
            help="URL of your Nezha Dashboard (e.g. https://mon.example.com). Paths or trailing slashes are normalized automatically.">
       <locale lang="zh-Hans" label="哪吒 Dashboard 地址" help="你的哪吒监控 Dashboard 地址，例如 https://mon.example.com。末尾斜杠或子路径会自动规范化。" />
+      <locale lang="zh-Hant" label="哪吒 Dashboard 位址" help="你的哪吒監控 Dashboard 位址，例如 https://mon.example.com。結尾斜線或子路徑會自動正規化。" />
     </input>
     <input name="apiToken" type="secret" label="API Token (PAT)"
            help="Optional. Personal Access Token (nzp_…). Recommended scopes: nezha:inventory:read, nezha:server:read, nezha:service:read, and optionally nezha:alertrule:read. Required when force_auth is enabled.">
       <locale lang="zh-Hans" label="API Token（PAT）" help="可选。个人访问令牌（nzp_…）。建议权限：nezha:inventory:read、nezha:server:read、nezha:service:read，可选 nezha:alertrule:read。站点启用 force_auth 时必填。" />
+      <locale lang="zh-Hant" label="API Token（PAT）" help="選填。個人存取權杖（nzp_…）。建議權限：nezha:inventory:read、nezha:server:read、nezha:service:read，選填 nezha:alertrule:read。站點啟用 force_auth 時必填。" />
     </input>
     <input name="refreshInterval" type="select" label="Refresh Interval" default="5">
       <locale lang="zh-Hans" label="刷新间隔" />
-      <option value="2" label="2s"><locale lang="zh-Hans" label="2 秒" /></option>
-      <option value="5" label="5s"><locale lang="zh-Hans" label="5 秒" /></option>
-      <option value="10" label="10s"><locale lang="zh-Hans" label="10 秒" /></option>
-      <option value="30" label="30s"><locale lang="zh-Hans" label="30 秒" /></option>
-      <option value="60" label="60s"><locale lang="zh-Hans" label="60 秒" /></option>
+      <locale lang="zh-Hant" label="重新整理間隔" />
+      <option value="2" label="2s"><locale lang="zh-Hans" label="2 秒" /><locale lang="zh-Hant" label="2 秒" /></option>
+      <option value="5" label="5s"><locale lang="zh-Hans" label="5 秒" /><locale lang="zh-Hant" label="5 秒" /></option>
+      <option value="10" label="10s"><locale lang="zh-Hans" label="10 秒" /><locale lang="zh-Hant" label="10 秒" /></option>
+      <option value="30" label="30s"><locale lang="zh-Hans" label="30 秒" /><locale lang="zh-Hant" label="30 秒" /></option>
+      <option value="60" label="60s"><locale lang="zh-Hans" label="60 秒" /><locale lang="zh-Hant" label="60 秒" /></option>
     </input>
     <input name="liveUpdates" type="bool" label="Live WebSocket (Guest Mode)" default="true"
            help="Use WebSocket for guest-accessible sites, with a REST reconciliation every 30s. Disable for REST-only polling. PAT mode always uses REST.">
       <locale lang="zh-Hans" label="实时 WebSocket（游客模式）" help="游客可访问的站点使用 WebSocket，并每 30 秒通过 REST 对账。关闭后仅使用 REST 轮询；PAT 模式始终使用 REST。" />
+      <locale lang="zh-Hant" label="即時 WebSocket（訪客模式）" help="訪客可存取的站點使用 WebSocket，並每 30 秒透過 REST 對帳。關閉後僅使用 REST 輪詢；PAT 模式始終使用 REST。" />
     </input>
     <input name="trayFormat" type="select" label="Tray Display" default="online_total">
       <locale lang="zh-Hans" label="菜单栏显示格式" />
+      <locale lang="zh-Hant" label="選單列顯示格式" />
       <option value="online_total" label="8/10 · 1.1M/s" />
       <option value="total" label="1.1M/s" />
-      <option value="online_both" label="8/10 · ↑Up ↓Down"><locale lang="zh-Hans" label="8/10 · ↑上行 ↓下行" /></option>
+      <option value="online_both" label="8/10 · ↑Up ↓Down"><locale lang="zh-Hans" label="8/10 · ↑上行 ↓下行" /><locale lang="zh-Hant" label="8/10 · ↑上行 ↓下行" /></option>
       <option value="online" label="8/10" />
-      <option value="stacked_rate" label="Stacked ↑↓ Rate (macOS)"><locale lang="zh-Hans" label="双行紧凑速率（macOS）" /></option>
-      <option value="rate_spark" label="Rate + Sparkline (macOS)"><locale lang="zh-Hans" label="双行速率 + 迷你流量图（macOS）" /></option>
-      <option value="cpu_spark" label="CPU + Sparkline (macOS)"><locale lang="zh-Hans" label="集群 CPU + 迷你趋势图（macOS）" /></option>
+      <option value="stacked_rate" label="Stacked ↑↓ Rate (macOS)"><locale lang="zh-Hans" label="双行紧凑速率（macOS）" /><locale lang="zh-Hant" label="雙行精簡速率（macOS）" /></option>
+      <option value="rate_spark" label="Rate + Sparkline (macOS)"><locale lang="zh-Hans" label="双行速率 + 迷你流量图（macOS）" /><locale lang="zh-Hant" label="雙行速率 + 迷你流量圖（macOS）" /></option>
+      <option value="cpu_spark" label="CPU + Sparkline (macOS)"><locale lang="zh-Hans" label="集群 CPU + 迷你趋势图（macOS）" /><locale lang="zh-Hant" label="叢集 CPU + 迷你趨勢圖（macOS）" /></option>
     </input>
     <input name="showTrayIcon" type="bool" label="Show Menu Bar Logo" default="true"
            help="Show or hide the Nezha logo in the menu bar. Applies to both text and rich macOS tray styles.">
       <locale lang="zh-Hans" label="菜单栏显示 Logo" help="在菜单栏中显示或隐藏哪吒图标，同时适用于普通文本和 macOS 富渲染模式。" />
+      <locale lang="zh-Hant" label="選單列顯示 Logo" help="在選單列中顯示或隱藏哪吒圖示，同時適用於純文字與 macOS 富渲染模式。" />
     </input>
     <input name="notchMetric" type="select" label="Notch Compact Metric" default="rate"
            help="Metric shown on the right wing of the notch (Metrix.Bar Plus on macOS / Windows).">
       <locale lang="zh-Hans" label="刘海屏紧凑指标" help="刘海屏右侧翼显示的紧凑数值（需 Metrix.Bar Plus，支持 macOS / Windows）。" />
-      <option value="rate" label="Aggregate Rate (340K)"><locale lang="zh-Hans" label="聚合网速（如 340K）" /></option>
-      <option value="stacked_rate" label="Stacked ↑↓ Rate"><locale lang="zh-Hans" label="双行上下行速率（↑上行 / ↓下行）" /></option>
-      <option value="down" label="Download Rate (↓188K)"><locale lang="zh-Hans" label="下行速率（如 ↓188K）" /></option>
-      <option value="up" label="Upload Rate (↑170K)"><locale lang="zh-Hans" label="上行速率（如 ↑170K）" /></option>
-      <option value="cpu" label="Average CPU (18%)"><locale lang="zh-Hans" label="平均 CPU（如 18%）" /></option>
-      <option value="online" label="Online Count (21/21)"><locale lang="zh-Hans" label="在线数（如 21/21）" /></option>
+      <locale lang="zh-Hant" label="瀏海屏精簡指標" help="瀏海屏右側翼顯示的精簡數值（需 Metrix.Bar Plus，支援 macOS / Windows）。" />
+      <option value="rate" label="Aggregate Rate (340K)"><locale lang="zh-Hans" label="聚合网速（如 340K）" /><locale lang="zh-Hant" label="彙總網速（如 340K）" /></option>
+      <option value="stacked_rate" label="Stacked ↑↓ Rate"><locale lang="zh-Hans" label="双行上下行速率（↑上行 / ↓下行）" /><locale lang="zh-Hant" label="雙行上下行速率（↑上行 / ↓下行）" /></option>
+      <option value="down" label="Download Rate (↓188K)"><locale lang="zh-Hans" label="下行速率（如 ↓188K）" /><locale lang="zh-Hant" label="下行速率（如 ↓188K）" /></option>
+      <option value="up" label="Upload Rate (↑170K)"><locale lang="zh-Hans" label="上行速率（如 ↑170K）" /><locale lang="zh-Hant" label="上行速率（如 ↑170K）" /></option>
+      <option value="cpu" label="Average CPU (18%)"><locale lang="zh-Hans" label="平均 CPU（如 18%）" /><locale lang="zh-Hant" label="平均 CPU（如 18%）" /></option>
+      <option value="online" label="Online Count (21/21)"><locale lang="zh-Hans" label="在线数（如 21/21）" /><locale lang="zh-Hant" label="在線數（如 21/21）" /></option>
     </input>
     <input name="notchActivity" type="bool" label="Notch Alert Island" default="true"
            help="Temporarily bring Nezha into the notch island when a server goes offline, a probe fails, cycle traffic crosses a threshold, or an Inbox alert arrives. Enable 'Allow automatic notch expansion' in Display Settings to briefly auto-expand on critical alerts.">
       <locale lang="zh-Hans" label="刘海屏告警动态岛" help="节点离线、探针异常、周期流量超限或收到 Inbox Webhook/邮件告警时，在刘海屏限时高亮提醒；在显示设置中开启「允许自动展开刘海屏」后，严重告警还会自动短时展开详情。" />
+      <locale lang="zh-Hant" label="瀏海屏告警動態島" help="節點離線、探針異常、週期流量超限或收到 Inbox Webhook/郵件告警時，在瀏海屏限時高亮提醒；在顯示設定中開啟「允許自動展開瀏海屏」後，嚴重告警還會自動短時展開詳情。" />
     </input>
     <input name="serverView" type="select" label="Server List Layout" default="auto"
            help="Choose cards, compact sortable table, or automatic (cards in compact flyout, sortable table with side-by-side detail in wide windows / standalone app).">
       <locale lang="zh-Hans" label="服务器列表布局" help="选择卡片网格、紧凑可排序表格或自动切换（弹窗使用卡片，宽窗口或独立 App 自动切为表格 + 右侧详情双栏）。" />
-      <option value="auto" label="Auto (Cards / Wide Table)"><locale lang="zh-Hans" label="自动（弹窗卡片 / 宽窗表格）" /></option>
-      <option value="cards" label="Cards Grid"><locale lang="zh-Hans" label="精炼卡片网格" /></option>
-      <option value="table" label="Sortable Table"><locale lang="zh-Hans" label="紧凑可排序表格" /></option>
+      <locale lang="zh-Hant" label="伺服器列表佈局" help="選擇卡片網格、精簡可排序表格或自動切換（彈窗使用卡片，寬視窗或獨立 App 自動切換為表格 + 右側詳情雙欄）。" />
+      <option value="auto" label="Auto (Cards / Wide Table)"><locale lang="zh-Hans" label="自动（弹窗卡片 / 宽窗表格）" /><locale lang="zh-Hant" label="自動（彈窗卡片 / 寬窗表格）" /></option>
+      <option value="cards" label="Cards Grid"><locale lang="zh-Hans" label="精炼卡片网格" /><locale lang="zh-Hant" label="精煉卡片網格" /></option>
+      <option value="table" label="Sortable Table"><locale lang="zh-Hans" label="紧凑可排序表格" /><locale lang="zh-Hant" label="精簡可排序表格" /></option>
     </input>
     <input name="panelWidth" type="select" label="Flyout Panel Width" default="medium"
            help="Unified width for the menu bar flyout panel across all tabs. Wide windows and standalone app automatically expand.">
       <locale lang="zh-Hans" label="菜单栏面板宽度" help="设置菜单栏弹窗在各标签页下的统一宽度（小 400px / 中 460px / 大 520px）；宽窗口和独立 App 会自动展开。" />
-      <option value="small" label="Small (400px)"><locale lang="zh-Hans" label="小（400px · 紧凑）" /></option>
-      <option value="medium" label="Medium (460px)"><locale lang="zh-Hans" label="中（460px · 均衡）" /></option>
-      <option value="large" label="Large (520px)"><locale lang="zh-Hans" label="大（520px · 宽松）" /></option>
+      <locale lang="zh-Hant" label="選單列面板寬度" help="設定選單列彈窗在各分頁下的統一寬度（小 400px / 中 460px / 大 520px）；寬視窗與獨立 App 會自動展開。" />
+      <option value="small" label="Small (400px)"><locale lang="zh-Hans" label="小（400px · 紧凑）" /><locale lang="zh-Hant" label="小（400px · 緊湊）" /></option>
+      <option value="medium" label="Medium (460px)"><locale lang="zh-Hans" label="中（460px · 均衡）" /><locale lang="zh-Hant" label="中（460px · 均衡）" /></option>
+      <option value="large" label="Large (520px)"><locale lang="zh-Hans" label="大（520px · 宽松）" /><locale lang="zh-Hant" label="大（520px · 寬鬆）" /></option>
     </input>
     <input name="widgetMode" type="select" label="Desktop Widget" default="overview"
            help="Content shown by desktop widgets from this instance. Install multiple Nezha instances in Metrix.Bar 0.3+ if you want different widget modes side by side.">
       <locale lang="zh-Hans" label="桌面小组件内容" help="选择此实例桌面小组件展示的内容。Metrix.Bar 0.3+ 支持安装多个 Nezha 实例，分别绑定不同小组件模式或不同哪吒面板。" />
-      <option value="overview" label="Fleet Overview"><locale lang="zh-Hans" label="全部服务器总览" /></option>
-      <option value="server" label="Single Server"><locale lang="zh-Hans" label="单台服务器" /></option>
-      <option value="traffic" label="Cycle Traffic"><locale lang="zh-Hans" label="周期流量" /></option>
-      <option value="attention" label="Attention Items"><locale lang="zh-Hans" label="关注事项" /></option>
+      <locale lang="zh-Hant" label="桌面小工具內容" help="選擇此實例桌面小工具展示的內容。Metrix.Bar 0.3+ 支援安裝多個 Nezha 實例，分別綁定不同小工具模式或不同哪吒面板。" />
+      <option value="overview" label="Fleet Overview"><locale lang="zh-Hans" label="全部服务器总览" /><locale lang="zh-Hant" label="全部伺服器總覽" /></option>
+      <option value="server" label="Single Server"><locale lang="zh-Hans" label="单台服务器" /><locale lang="zh-Hant" label="單台伺服器" /></option>
+      <option value="traffic" label="Cycle Traffic"><locale lang="zh-Hans" label="周期流量" /><locale lang="zh-Hant" label="週期流量" /></option>
+      <option value="attention" label="Attention Items"><locale lang="zh-Hans" label="关注事项" /><locale lang="zh-Hant" label="關注事項" /></option>
     </input>
     <input name="widgetServer" type="string" label="Widget Server ID or Unique Name"
            help="Single Server mode only. Leave empty to follow the server selected in the panel, or enter an ID / case-insensitive unique full name. Ambiguous names require an ID.">
       <locale lang="zh-Hans" label="小组件服务器（ID 或唯一名称）" help="仅在“单台服务器”模式下生效。留空则跟随面板当前选中的服务器，或填写服务器 ID / 不区分大小写的唯一完整名称；重名时请填写 ID。" />
+      <locale lang="zh-Hant" label="小工具伺服器（ID 或唯一名稱）" help="僅在「單台伺服器」模式下生效。留空則跟隨面板目前選中的伺服器，或填寫伺服器 ID / 不區分大小寫的唯一完整名稱；重名時請填寫 ID。" />
     </input>
     <input name="offlineNotify" type="bool" label="Notify on Server Offline" default="true">
       <locale lang="zh-Hans" label="服务器离线通知" />
+      <locale lang="zh-Hant" label="伺服器離線通知" />
     </input>
     <input name="probeNotify" type="bool" label="Notify on Probe Failure" default="true">
       <locale lang="zh-Hans" label="服务探测失败通知" />
+      <locale lang="zh-Hant" label="服務探測失敗通知" />
     </input>
     <input name="trafficNotify" type="bool" label="Notify on Cycle Traffic Warning" default="true"
            help="Notify when a cycle traffic quota crosses 80% / 95%, or when the current burn rate is projected to exhaust the quota before reset.">
       <locale lang="zh-Hans" label="周期流量预警通知" help="周期流量使用率首次达到 80% / 95%，或按当前消耗速率预计在周期结束前耗尽时发送提醒。" />
+      <locale lang="zh-Hant" label="週期流量預警通知" help="週期流量使用率首次達到 80% / 95%，或依目前消耗速率預計在週期結束前耗盡時發送提醒。" />
     </input>
     <input name="maskServiceTargets" type="bool" label="Mask Service URLs &amp; IPs" default="false"
            help="Mask URLs, hostnames, and IP addresses shown in the Services tab for privacy or screenshots.">
       <locale lang="zh-Hans" label="服务目标 URL / IP 打码" help="在“服务”标签页中对探测目标的 URL、域名和 IP 地址进行脱敏打码，适合隐私保护或截图分享。" />
+      <locale lang="zh-Hant" label="服務目標 URL / IP 打碼" help="在「服務」分頁中對探測目標的 URL、網域與 IP 位址進行脫敏打碼，適合隱私保護或截圖分享。" />
     </input>
   </inputs>
 
@@ -125,7 +145,7 @@ Highlights
 - Menu Bar Rich Rendering (macOS): Choose stacked ↑↓ rates, rate + traffic sparkline, or cluster CPU + trend sparkline, and toggle the Nezha logo freely.
 - Unified Panel Width & Adaptive Layout: Pick Small (400px), Medium (460px), or Large (520px) flyout width; wide windows and standalone apps automatically switch to a sortable table + live detail split view.
 - Notch & Auto-Expand Alerts (Plus): Compact status on the wings, hover/click for cluster overview, timed alert highlights, and brief auto-expansion on critical alerts when "Allow automatic notch expansion" is enabled in Display Settings.
-- Grouped & Silent-Aware Alerts: Notifications include subtitles, macOS Notification Center grouping, batch coalescing on alert bursts, quiet delivery for low-priority warnings, and cycle traffic burn-rate projections.
+- Background Monitoring & Grouped Alerts: Stays active in the background while enabled on Metrix.Bar 0.3.4+ (≥1m interval when no visible surface is active) so offline, probe, traffic pace, and Plus Inbox alerts keep arriving with subtitles, macOS grouping, batch coalescing, and quiet low-priority delivery.
 - Native Webhook / Email Alert Feed (Plus Inbox): Bind a Metrix.Bar Inbox to this dashboard and point Nezha's notification channel at it to receive every rule alert (even while your Mac sleeps).
 - Multi-Size Desktop Widgets: Small, Medium, and Large widgets supporting Fleet Overview, Single Server, Cycle Traffic, and Attention modes.]]>
     <locale lang="zh-Hans"><![CDATA[连接哪吒监控 V2（Nezha Monitoring）面板，支持游客模式或 PAT 认证。本看板只读，不执行终端、文件管理或 MCP 写操作。
@@ -138,9 +158,22 @@ Highlights
 - 菜单栏富渲染（macOS）：在「菜单栏显示格式」中选择双行紧凑速率、双行速率 + 迷你流量图，或集群 CPU + 迷你趋势图；可通过「菜单栏显示 Logo」自由开关图标显示。
 - 统一面板宽度与自适应布局：提供「菜单栏面板宽度」小（400px）/ 中（460px）/ 大（520px）三档调节，搭配全宽等分标签栏与自适应分组胶囊栏；在宽窗口或独立 App（宽度 ≥ 860）下自动展开左侧可排序表格 + 右侧实时详情双栏视图。
 - 刘海屏与告警自动展开（Plus）：左右侧翼显示紧凑状态，悬停/点击展开集群概览；发生离线、探针异常、流量预警或高优 Inbox 告警时限时高亮提醒，在显示设置中开启「允许自动展开刘海屏」后还可自动短时展开告警卡片。
-- 分组静音通知与流量速率预警：桌面通知支持副标题、macOS 通知分组、单次多条告警自动合并与低优先级静音推送；流量页支持双进度条与周期消耗速率超额预测。
+- 后台保活与分组静音通知：在 Metrix.Bar 0.3.4+ 中启用期间即使未固定任何可见入口也会按 ≥1 分钟间隔后台保活，持续推送离线、探针、流量消耗速率预警与分组/合并/低优静音通知。
 - 原生 Webhook / 邮件告警流（Plus 收件箱）：在 Metrix.Bar 创建收件箱并绑定到此实例，将哪吒通知渠道指向该地址，即可在「关注」页接收完整规则告警（含休眠期间）。
 - 多尺寸桌面小组件：支持小、中、大三种尺寸与总览 / 单机 / 周期流量 / 关注四种模式；支持安装多个实例分别绑定不同模式或集群。]]></locale>
+    <locale lang="zh-Hant"><![CDATA[連接哪吒監控 V2（Nezha Monitoring）面板，支援訪客模式或 PAT 驗證。本看板嚴格唯讀，不執行終端機、檔案管理或 MCP 寫入操作。
+
+快速設定
+1. 在「哪吒 Dashboard 位址」填寫面板位址（如 https://mon.example.com），結尾斜線或子路徑會自動正規化。
+2. 若站點啟用了 force_auth，或需要讀取隱藏節點與告警規則，請在哪吒管理端「設定 → API Tokens」建立唯讀 PAT（nzp_…），勾選 nezha:inventory:read、nezha:server:read、nezha:service:read（選填 nezha:alertrule:read），填入「API Token（PAT）」。權杖僅儲存在系統憑證庫中。
+
+主要特色
+- 選單列富渲染（macOS）：在「選單列顯示格式」中選擇雙行精簡速率、雙行速率 + 迷你流量圖，或叢集 CPU + 迷你趨勢圖；可透過「選單列顯示 Logo」自由開關圖示顯示。
+- 統一面板寬度與自適應佈局：提供「選單列面板寬度」小（400px）/ 中（460px）/ 大（520px）三檔調整，搭配全寬等分分頁列與自適應分組膠囊列；在寬視窗或獨立 App（寬度 ≥ 860）下自動展開左側可排序表格 + 右側即時詳情雙欄檢視。
+- 瀏海屏與告警自動展開（Plus）：左右側翼顯示精簡狀態，懸停/點擊展開叢集概覽；發生離線、探針異常、流量預警或高優 Inbox 告警時限時高亮提醒，在顯示設定中開啟「允許自動展開瀏海屏」後還可自動短時展開告警卡片。
+- 背景保活與分組靜音通知：在 Metrix.Bar 0.3.4+ 中啟用期間即使未釘選任何可見入口，也會依 ≥1 分鐘間隔在背景持續監控，穩定推送離線、探針、流量消耗速率預警與分組/合併/低優靜音通知。
+- 原生 Webhook / 郵件告警流（Plus 收件匣）：在 Metrix.Bar 建立收件匣並綁定至此實例，將哪吒通知管道指向該位址，即可在「關注」頁接收完整規則告警（含休眠期間）。
+- 多尺寸桌面小工具：支援小、中、大三種尺寸與總覽 / 單機 / 週期流量 / 關注四種模式；支援安裝多個實例分別綁定不同模式或叢集。]]></locale>
   </docs>
 
   <script apis="app localStorage notification shell websocket clipboard match-media"><![CDATA[
