@@ -48,7 +48,7 @@
 - **流量 Tab** — 周期流量提醒（来自 `/api/v1/service` 的 `cycle_transfer_stats`）：每条周期一张卡，显示已用/配额、剩余量、已用流量占比与周期时间占比双进度条对比、精简周期起止与剩余时间；按当前速率预计期末超额时高亮提示预计百分比，≥80% 变橙、≥95% 变红
 - **服务 Tab** — HTTP / Ping / TCP 探测列表：存活率、最新延迟、失败标红；类型过滤；支持通过设置项 `maskServiceTargets` 或筛选栏右侧快捷按钮一键对探测目标 URL / 域名 / IP 脱敏打码
 - **关注 Tab + Plus Inbox 告警** — 实时关注事项（离线主机 + 失败探测 + 周期流量阈值）+ **Metrix.Bar Plus 收件箱 Webhook / 邮件告警流**（接收哪吒后端完整规则告警，支持展开详情、一键复制对勾反馈、标记已读/未读与删除）+ PAT `nezha:alertrule:read` 告警规则列表
-- **通知与省流** — 离线 / 探测失败 / 周期流量 / Inbox 告警均支持点击通知直达对应节点或告警；在 Metrix.Bar 0.3.3+ 支持副标题、macOS 通知分组、单次多条告警自动合并以及低优先级静音推送；基于 `$metrix.outputs()` 按需裁剪渲染与详情请求，并监听 `network.change` 在唤醒/切网后即时重连刷新
+- **通知与省流** — 离线 / 探测失败 / 周期流量 / Inbox 告警均支持点击通知直达对应节点或告警；在 Metrix.Bar 0.3.3+ 支持副标题、macOS 通知分组、单次多条告警自动合并以及低优先级静音推送；在 Metrix.Bar 0.3.4+ 启用 `keep-alive="true"`，即使不固定任何可见入口也可按 ≥ 1 分钟间隔在后台持续推送告警；同时基于 `$metrix.outputs()` 按需裁剪渲染与详情请求，并监听 `network.change` 在唤醒/切网后即时重连刷新
 - **认证** — 游客模式（站点需允许未登录读取）或 PAT；强制登录站点会显示明确的「请填写 API Token」提示
 - **数据通道** — `liveUpdates` 开启时，游客站点使用 `/api/v1/ws/server` WebSocket + 每 30 秒 REST 对账；关闭后完全使用 REST。PAT 始终按配置间隔（2–60s）进行 REST 轮询（Worker 的 WebSocket 无法携带 `Authorization` 头，把 PAT 放进 URL 会泄漏）
 - **分级刷新** — 服务数据至少 15 秒、设置与分组 5 分钟、告警规则 60 秒更新一次；手动刷新立即拉取全量。详情请求并行、去重，缓存最多保留 8 个服务器/周期条目
@@ -64,9 +64,17 @@
 https://awesome.metrix.bar/dashboards/index.json
 ```
 
-然后从目录中安装 **Nezha**。
+然后从目录中安装 **Nezha**（支持在看板菜单中一键检查更新）。
 
-### 方式 B：手动导入
+### 方式 B：一键直装链接
+
+在浏览器地址栏打开（或在终端运行 `open "..."`），Metrix.Bar 会拉取最新 `nezha.bar`、展示权限摘要，并保留更新来源以便在看板菜单中检查更新：
+
+```text
+metrixbar://install?url=https%3A%2F%2Fraw.githubusercontent.com%2Fbluenight91%2Fnezha-metrix-bar%2Fmain%2Fnezha.bar
+```
+
+### 方式 C：手动导入
 
 1. 下载 [nezha.bar](nezha.bar)
 2. 在 Metrix.Bar 中导入该文件并确认权限（仅申请你填写的 Dashboard 域名网络访问）
@@ -94,7 +102,7 @@ https://awesome.metrix.bar/dashboards/index.json
 
 PAT 在管理前端 **设置 → API Tokens** 创建；Token 只会保存在系统凭据库（secret input），不会出现在源码或日志中。
 
-在系统小组件选择器中添加 **Metrix.Bar** 并选择 **Nezha**，即可放置桌面卡片。macOS 需要 14+ 与 Metrix.Bar 0.2.0+；Windows 11 22H2+ 和 KDE Plasma 6 的支持范围以 Metrix.Bar 文档为准。Metrix.Bar 0.3+ 支持安装多个 Nezha 实例以同时放置不同模式的小组件；系统控制刷新时机，仅 Widget 保持活跃时最快每分钟更新一次。看板标题、简介、配置说明（`<docs>`）以及全部设置标签、选项和帮助文本均已通过 `<locale lang="zh-Hans">` 适配 Metrix.Bar 简体中文与英文界面（0.3.3+ 自动切换，旧版平滑回退）。
+在系统小组件选择器中添加 **Metrix.Bar** 并选择 **Nezha**，即可放置桌面卡片。macOS 需要 14+ 与 Metrix.Bar 0.2.0+；Windows 11 22H2+ 和 KDE Plasma 6 的支持范围以 Metrix.Bar 文档为准。Metrix.Bar 0.3+ 支持安装多个 Nezha 实例以同时放置不同模式的小组件；系统控制刷新时机，仅 Widget 保持活跃时最快每分钟更新一次。看板标题、简介、配置说明（`<docs>`）以及全部设置标签、选项和帮助文本均已通过 `<locale lang="zh-Hans">` 与 `<locale lang="zh-Hant">` 适配 Metrix.Bar 简体中文、繁体中文与英文界面（0.3.3+ 自动切换，旧版平滑回退）。
 
 ## 开发
 

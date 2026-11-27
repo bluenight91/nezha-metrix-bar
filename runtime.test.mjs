@@ -1866,8 +1866,16 @@ test("Plus Inbox coalesces multi-message arrivals, silences info-only batches, a
   assert.equal(notchStates[0].state, "expanded");
 });
 
-test("bar source declares zh-Hans locale for title, description, and docs", () => {
+test("bar source declares keep-alive and zh-Hans / zh-Hant locales for title, description, inputs, and docs", () => {
   const raw = fs.readFileSync(new URL("./nezha.bar", import.meta.url), "utf8");
+  assert.match(raw, /<bar\b[\s\S]*?\bkeep-alive="true"/);
+  assert.match(raw, /<bar\b[\s\S]*?\bversion="2\.1\.1"/);
   assert.match(raw, /<locale\s+lang="zh-Hans"[^>]*title="哪吒监控"/);
+  assert.match(raw, /<locale\s+lang="zh-Hant"[^>]*title="哪吒監控"/);
   assert.match(raw, /<docs>[\s\S]*?<locale\s+lang="zh-Hans">/);
+  assert.match(raw, /<docs>[\s\S]*?<locale\s+lang="zh-Hant">/);
+  const zhHansCount = (raw.match(/<locale\s+lang="zh-Hans"/g) || []).length;
+  const zhHantCount = (raw.match(/<locale\s+lang="zh-Hant"/g) || []).length;
+  assert.ok(zhHansCount >= 40, `expected >= 40 zh-Hans locales, got ${zhHansCount}`);
+  assert.equal(zhHantCount, zhHansCount, "every zh-Hans locale entry should have a matching zh-Hant entry");
 });
